@@ -82,13 +82,13 @@ NAMES = [
 # archetype: body proportions, fins, and personality priors
 ARCHETYPES = {
     #            len range   h/l ratio    tail       tail_len   spread  dorsal      anal        eye
-    "tetra":    dict(ln=(38, 66),  ratio=(0.36, 0.46), tail="fork",     tl=(0.30, 0.40), sp=(0.42, 0.55), do=(0.28, 0.40), an=(0.20, 0.30), eye=(0.11, 0.15)),
-    "goldfish": dict(ln=(70, 118), ratio=(0.50, 0.62), tail="fan",      tl=(0.38, 0.55), sp=(0.50, 0.65), do=(0.35, 0.50), an=(0.22, 0.32), eye=(0.10, 0.13)),
-    "tang":     dict(ln=(80, 128), ratio=(0.60, 0.74), tail="crescent", tl=(0.28, 0.38), sp=(0.55, 0.70), do=(0.30, 0.45), an=(0.28, 0.40), eye=(0.09, 0.12)),
-    "angel":    dict(ln=(70, 108), ratio=(0.80, 0.98), tail="fan",      tl=(0.30, 0.42), sp=(0.40, 0.52), do=(0.85, 1.15), an=(0.75, 1.05), eye=(0.08, 0.11)),
-    "betta":    dict(ln=(64, 102), ratio=(0.38, 0.50), tail="flowy",    tl=(0.60, 0.90), sp=(0.55, 0.75), do=(0.45, 0.70), an=(0.40, 0.60), eye=(0.10, 0.13)),
-    "puffer":   dict(ln=(56, 94),  ratio=(0.82, 0.98), tail="round",    tl=(0.22, 0.30), sp=(0.35, 0.45), do=(0.18, 0.28), an=(0.14, 0.22), eye=(0.16, 0.21)),
-    "catfish":  dict(ln=(90, 148), ratio=(0.34, 0.44), tail="fork",     tl=(0.26, 0.34), sp=(0.40, 0.50), do=(0.25, 0.38), an=(0.16, 0.24), eye=(0.09, 0.12)),
+    "tetra":    dict(ln=(32, 74),  ratio=(0.36, 0.46), tail="fork",     tl=(0.30, 0.40), sp=(0.42, 0.55), do=(0.28, 0.40), an=(0.20, 0.30), eye=(0.11, 0.15)),
+    "goldfish": dict(ln=(60, 132), ratio=(0.50, 0.62), tail="fan",      tl=(0.38, 0.55), sp=(0.50, 0.65), do=(0.35, 0.50), an=(0.22, 0.32), eye=(0.10, 0.13)),
+    "tang":     dict(ln=(68, 142), ratio=(0.60, 0.74), tail="crescent", tl=(0.28, 0.38), sp=(0.55, 0.70), do=(0.30, 0.45), an=(0.28, 0.40), eye=(0.09, 0.12)),
+    "angel":    dict(ln=(60, 122), ratio=(0.80, 0.98), tail="fan",      tl=(0.30, 0.42), sp=(0.40, 0.52), do=(0.85, 1.15), an=(0.75, 1.05), eye=(0.08, 0.11)),
+    "betta":    dict(ln=(56, 114), ratio=(0.38, 0.50), tail="flowy",    tl=(0.60, 0.90), sp=(0.55, 0.75), do=(0.45, 0.70), an=(0.40, 0.60), eye=(0.10, 0.13)),
+    "puffer":   dict(ln=(48, 106),  ratio=(0.82, 0.98), tail="round",    tl=(0.22, 0.30), sp=(0.35, 0.45), do=(0.18, 0.28), an=(0.14, 0.22), eye=(0.16, 0.21)),
+    "catfish":  dict(ln=(78, 166), ratio=(0.34, 0.44), tail="fork",     tl=(0.26, 0.34), sp=(0.40, 0.50), do=(0.25, 0.38), an=(0.16, 0.24), eye=(0.09, 0.12)),
 }
 ARCH_WEIGHTS = {"tetra": 22, "goldfish": 16, "tang": 14, "angel": 12,
                 "betta": 10, "puffer": 12, "catfish": 14}
@@ -1369,7 +1369,7 @@ class Aquarium:
             d = min([abs(xf - c.x_frac) for c in self.clams] + [abs(xf - r.x_frac) * 1.5 for r in self.rocks] + [1.0])
             if d > best_d:
                 best, best_d = xf, d
-        c = Clam(best, random.uniform(34, 58) * self.fish_scale, random.randrange(1 << 30))
+        c = Clam(best, random.uniform(42, 72) * self.fish_scale, random.randrange(1 << 30))
         self.clams.append(c)
         if not quiet:
             x = self.water.left + c.x_frac * self.water.w
