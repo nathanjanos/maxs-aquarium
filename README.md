@@ -53,7 +53,8 @@ right-click) works on mean fish too, if the reign of terror needs ending.
 
 ## Algae and the plecostomus
 
-Green algae spots slowly grow on the front glass. Plecostomus catfish —
+Green algae spots grow on the front glass (a fresh tank already has a
+few patches going). Plecostomus catfish —
 which show up more often in an algae-covered tank — latch onto the glass
 belly-first, sucker mouth working, and rasp the spots clean.
 
@@ -61,5 +62,8 @@ Fish really do get hungry — feed them or they'll crowd the surface begging,
 and a truly neglected fish will not make it. (Away from the keyboard the
 tank is merciful: fish get hungry while the app is closed, but nothing ever
 dies off-screen.) Overfeeding clouds the water, so go easy.
+
+And yes — the fish poop: little white worms, proportional to the fish,
+that squeeze out, sink to the sand, and dissolve. Max will notice.
 
 **ESC** or **Q** quits; the tank saves itself.

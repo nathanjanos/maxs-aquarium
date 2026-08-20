@@ -61,13 +61,18 @@ now; same stack as the weather-frame project.
   state; the loser is bitten, the winner `grow(2)`s (size and speed double,
   capped: mult ≤ 4, body ≤ 35% of water height — `rebuild_sprites`).
 - **Pleco + algae**: algae spots grow on the front glass (`Aquarium.algae`,
-  spawn ~30 s apart, cap MAX_ALGAE); plecos take `to_glass` → `suck`
+  spawn ~20 s apart, growth 0.15-0.40 px/s, cap MAX_ALGAE; `seed_algae`
+  guarantees 3 visible patches on fresh tanks AND loaded saves — algae is
+  drawn over fish because it is on the viewer's glass); plecos take `to_glass` → `suck`
   states, drawn belly-first (`build_pleco_belly`) in the glass layer above
   the algae, shrinking spots as they eat. Sucking plecos can't be hunted.
 - **World**: pellets sink, rest on sand, rot into `murk` (green haze that
   decays — overfeeding lesson); clams breathe on sines, snap when startled,
-  filter-feed pellets; rocks pre-render seeded blob polygons (30% draw in
-  front of fish for depth; ~28% are tall standing stones); sand level animates toward its target and
+  filter-feed pellets; rocks pre-render seeded blob polygons (40% draw in
+  front of fish, back rocks dimmed for depth; ~28% tall standing stones;
+  sizes up to 300 capped at 35% of water height). Fish poop `Poop` worms:
+  white, fish-proportional, extrude attached to the vent, then sink and
+  dissolve; sand level animates toward its target and
   everything on it rides along (`sand_top(x)` includes seeded dunes).
 - **Rendering order**: water gradient → additive light rays → sand → back
   rocks → clams → pellets → fish → particles → front rocks → murk → air gap

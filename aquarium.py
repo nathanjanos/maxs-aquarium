@@ -558,21 +558,72 @@ class Sparkle:  # fight clash
         pygame.draw.line(s, c, (self.x, self.y - r), (self.x, self.y + r))
 
 
-class Speck:  # ahem. fish happen.
-    def __init__(self, x, y):
-        self.x, self.y = x, y
+class Poop:  # ahem. fish happen.
+    """A little white worm: squeezes out, trails the fish, detaches, sinks, dissolves."""
+
+    def __init__(self, fish):
+        self.fish = fish
+        self.len = clamp(fish.size * 0.22, 6, 40)
+        self.th = max(2, int(fish.size * 0.035))
+        self.out = 0.0            # extruded fraction
+        self.attached = True
+        self.pos = V2(fish.pos)
+        self.ph = random.uniform(0, TAU)
         self.t = 0.0
+        self.rest_t = 0.0
+        self.col = (232, 229, 218)
+
+    def vent(self):
+        f = self.fish
+        return V2(f.pos.x - f.facing * f.size * 0.42, f.pos.y + f.fh * 0.10)
 
     def update(self, dt, w):
         self.t += dt
-        if self.y < w.sand_top(self.x) - 2:
-            self.y += 14 * dt
-            self.x += math.sin(self.t * 2) * 4 * dt
-        return self.t < 14
+        self.ph += dt * 2.6
+        if self.attached:
+            f = self.fish
+            if f is None or f.remove or f.state in ("dead", "netted"):
+                self.attached = False
+                self.fish = None
+            else:
+                self.out = min(1.0, self.out + dt / 2.2)
+                self.pos = self.vent()
+                if self.out >= 1.0 and (f.vel.length() > f.cruise * 1.6 or random.random() < dt * 0.8):
+                    self.attached = False
+                    self.fish = None
+            return True
+        floor = w.sand_top(self.pos.x) - 3
+        if self.pos.y + self.len < floor:
+            self.pos.y += 15 * dt
+            self.pos.x += math.sin(self.ph * 0.5) * 5 * dt
+        else:
+            self.rest_t += dt
+            if self.rest_t > 5.5:
+                w.murk = min(1.0, w.murk + 0.004)
+                return False
+        return self.t < 40
 
     def draw(self, s, w):
-        if self.t < 12 or int(self.t * 8) % 2:
-            pygame.draw.circle(s, (96, 78, 52), (int(self.x), int(self.y)), 1)
+        L = self.len * (self.out if self.attached else 1.0)
+        if L < 2:
+            return
+        if self.attached and self.fish is not None:
+            anchor = self.vent()
+            d = V2(-self.fish.facing * 0.8, 0.6).normalize()
+        else:
+            anchor = self.pos
+            d = V2(math.sin(self.ph * 0.35) * 0.18, 1).normalize()
+        perp = V2(-d.y, d.x)
+        fade = 1.0
+        if self.rest_t > 2:
+            fade = max(0.15, 1 - (self.rest_t - 2) / 3.5)
+        col = dim(self.col, 0.25 + 0.75 * fade)
+        n = max(4, int(L / max(3, self.th)))
+        for i in range(n):
+            tt = i / (n - 1)
+            p = anchor + d * (L * tt) + perp * (math.sin(self.ph + tt * 5.0) * self.th * 0.8)
+            r = max(1, int(self.th * (1.0 - 0.35 * tt) * (0.4 + 0.6 * fade)))
+            pygame.draw.circle(s, col, (int(p.x), int(p.y)), r)
 
 
 class Tear:
@@ -704,6 +755,8 @@ class Rock:
             col = hsv(0.0, 0.0, rng.uniform(0.28, 0.48))
         else:
             col = hsv(rng.uniform(0.55, 0.62), rng.uniform(0.10, 0.25), rng.uniform(0.28, 0.45))
+        if not self.front:        # background rocks sit deeper: dimmer, hazier
+            col = dim(col, 0.74)
         if rng.random() < 0.28:   # occasionally a tall standing stone
             rx = self.size * rng.uniform(0.22, 0.30)
             ry = self.size * rng.uniform(0.52, 0.72)
@@ -908,7 +961,7 @@ class Fish:
         self.cool = {}
         self.death_t = 0.0
         self.remove = False
-        self.next_poop = random.uniform(200, 520)
+        self.next_poop = random.uniform(40, 160)
         self.beg_pt = None
         self.beg_next = 0.0
         self.puff = 1.0           # puffer inflation factor
@@ -1033,9 +1086,8 @@ class Fish:
         if self.next_poop > 0:
             self.next_poop -= dt
             if self.next_poop <= 0:
-                w.particles.append(Speck(self.pos.x - self.facing * self.size * 0.4, self.pos.y + self.fh * 0.1))
-                w.murk = min(1.0, w.murk + 0.004)
-                self.next_poop = random.uniform(200, 520)
+                w.particles.append(Poop(self))
+                self.next_poop = random.uniform(90, 240)
         if self.cry_t > 0:
             self.cry_t -= dt
             if random.random() < dt * 3.0:
@@ -1410,7 +1462,7 @@ class Aquarium:
         self.particles = []
         self.corpses = []        # bitten-in-half fish floating up
         self.algae = []          # spots growing on the front glass
-        self.algae_next = random.uniform(15, 30)
+        self.algae_next = random.uniform(6, 14)
         self.fish_added = 0      # lifetime count; every MEAN_EVERYth is mean
         self.pills = []          # (fish, until)
         self.rels = {}
@@ -1529,6 +1581,7 @@ class Aquarium:
             self.add_clam(quiet=True)
         for arch in ("tetra", "tetra", "goldfish", "tang", "catfish"):
             self.add_fish(arch=arch, quiet=True)
+        self.seed_algae(3)
         self.dirty = True
 
     def _pick_name(self):
@@ -1594,8 +1647,8 @@ class Aquarium:
             d = min([abs(xf - r.x_frac) for r in self.rocks] + [1.0])
             if d > best_d:
                 best, best_d = xf, d
-        size = random.uniform(40, 210) * self.fish_scale
-        r = Rock(best, size, random.randrange(1 << 30), front=random.random() < 0.3)
+        size = min(random.uniform(40, 300) * self.fish_scale, self.water.h * 0.35)
+        r = Rock(best, size, random.randrange(1 << 30), front=random.random() < 0.4)
         self.rocks.append(r)
         if not quiet:
             x = self.water.left + r.x_frac * self.water.w
@@ -1664,10 +1717,17 @@ class Aquarium:
     def spawn_algae(self):
         x = random.uniform(self.water.left + 40, self.water.right - 40)
         y = random.uniform(self.waterline + 40, self.water.bottom - 30)
-        mr = random.uniform(12, 42) * clamp(self.fish_scale, 0.7, 1.4)
-        self.algae.append(self._make_spot(x, y, 2.5, mr, random.uniform(0.05, 0.16),
+        mr = random.uniform(16, 55) * clamp(self.fish_scale, 0.7, 1.4)
+        self.algae.append(self._make_spot(x, y, 4.0, mr, random.uniform(0.15, 0.40),
                                           random.randrange(1 << 30)))
         self.dirty = True
+
+    def seed_algae(self, n):
+        """Guarantee some already-visible growth (fresh tanks, old saves)."""
+        while len(self.algae) < n:
+            self.spawn_algae()
+            a = self.algae[-1]
+            a["r"] = a["max_r"] * random.uniform(0.45, 0.85)
 
     @staticmethod
     def _make_spot(x, y, r, max_r, rate, seed):
@@ -1948,6 +2008,8 @@ class Aquarium:
                         f.hunger = max(0.0, f.hunger - EAT_RELIEF)
                         f.health = min(100.0, f.health + 1.2)
                         f.eat_pause = 0.25
+                        if random.random() < 0.3:   # digestion is prompt
+                            f.next_poop = min(f.next_poop, random.uniform(15, 50))
                         self.particles.append(Puff(p.pos.x, p.pos.y))
                         break
         self.pellets = [p for p in self.pellets if p.update(dt, self)]
@@ -1975,7 +2037,7 @@ class Aquarium:
         if self.algae_next <= 0:
             if len(self.algae) < MAX_ALGAE:
                 self.spawn_algae()
-            self.algae_next = random.uniform(20, 45)
+            self.algae_next = random.uniform(12, 26)
 
         # ambient bubbles: airstone + occasional fish bubble
         self.airstone_next -= dt
@@ -2135,12 +2197,16 @@ class Aquarium:
                 d = ri * 2
                 surf = pygame.Surface((d * 2, d * 2), pygame.SRCALPHA)
                 for dxf, dyf, rf in a["blobs"]:
-                    pygame.draw.circle(surf, (58, 122, 52, 88),
+                    pygame.draw.circle(surf, (66, 148, 60, 118),
                                        (int(d + dxf * ri), int(d + dyf * ri)), max(1, int(rf * ri)))
                 for dxf, dyf, rf in a["blobs"][:3]:
-                    pygame.draw.circle(surf, (40, 92, 40, 70),
+                    pygame.draw.circle(surf, (46, 108, 44, 95),
                                        (int(d + dxf * ri * 0.6), int(d + dyf * ri * 0.6)),
                                        max(1, int(rf * ri * 0.45)))
+                for dxf, dyf, rf in a["blobs"][1:4]:   # bright flecks so it reads as algae
+                    pygame.draw.circle(surf, (110, 190, 92, 130),
+                                       (int(d + dxf * ri * 0.8), int(d - abs(dyf) * ri * 0.7)),
+                                       max(1, int(rf * ri * 0.22)))
                 a["surf"] = surf
                 a["surf_r"] = ri
             s_ = a["surf"]
@@ -2208,7 +2274,8 @@ class Aquarium:
             self.algae.append(self._make_spot(
                 self.water.left + ad["xf"] * self.water.w,
                 self.water.top + ad["yf"] * self.water.h,
-                ad["r"], ad["max_r"], ad["rate"], ad["seed"]))
+                ad["r"], ad["max_r"], max(ad["rate"], 0.15), ad["seed"]))
+        self.seed_algae(3)   # older tanks get visible growth too
         self.rels = dict(d.get("rels", {}))
         elapsed = max(0.0, time.time() - d.get("saved_at", time.time()))
         extra_hunger = min(elapsed / HUNGER_FULL_S * 0.5, 1.0)
