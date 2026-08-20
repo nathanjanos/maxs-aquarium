@@ -49,6 +49,8 @@ MAX_SAND_FRAC     = 0.26       # of water height
 MAX_PELLETS       = 90
 MAX_ALGAE         = 12
 MEAN_EVERY        = 10         # every Nth fish added is a mean one
+PLECO_GROW        = 0.004      # growth multiplier gained per unit of food
+PLECO_MAX_FRAC    = 0.30       # a pleco can reach this fraction of tank width
 
 HUNGER_FULL_S     = 360.0      # seconds from fed to fully hungry
 STARVE_GRACE_S    = 240.0      # seconds at full hunger before health drains
@@ -92,9 +94,10 @@ ARCHETYPES = {
     "puffer":   dict(ln=(48, 106),  ratio=(0.82, 0.98), tail="round",    tl=(0.22, 0.30), sp=(0.35, 0.45), do=(0.18, 0.28), an=(0.14, 0.22), eye=(0.16, 0.21)),
     "catfish":  dict(ln=(78, 166), ratio=(0.34, 0.44), tail="fork",     tl=(0.26, 0.34), sp=(0.40, 0.50), do=(0.25, 0.38), an=(0.16, 0.24), eye=(0.09, 0.12)),
     "pleco":    dict(ln=(100, 170), ratio=(0.30, 0.38), tail="fork",    tl=(0.24, 0.32), sp=(0.42, 0.52), do=(0.55, 0.85), an=(0.14, 0.20), eye=(0.09, 0.11)),
+    "clown":    dict(ln=(55, 95),   ratio=(0.44, 0.54), tail="round",   tl=(0.26, 0.34), sp=(0.42, 0.52), do=(0.30, 0.42), an=(0.22, 0.30), eye=(0.11, 0.14)),
 }
 ARCH_WEIGHTS = {"tetra": 22, "goldfish": 16, "tang": 14, "angel": 12,
-                "betta": 10, "puffer": 12, "catfish": 14, "pleco": 8}
+                "betta": 10, "puffer": 12, "catfish": 14, "pleco": 8, "clown": 14}
 
 # personality priors per archetype: 0..1. Deliberately far apart so each
 # species has a strong, recognizable temperament (per-fish jitter is small):
@@ -111,6 +114,7 @@ TRAIT_PRIORS = {
     "puffer":   (0.25, 0.30, 0.95, 0.90, 0.70, 0.40, 0.45),
     "catfish":  (0.03, 0.30, 0.40, 0.20, 0.85, 0.65, 0.20),
     "pleco":    (0.02, 0.20, 0.30, 0.10, 0.90, 0.50, 0.15),
+    "clown":    (0.15, 0.85, 0.70, 0.60, 0.60, 0.50, 0.70),
 }
 TRAIT_KEYS = ("agg", "soc", "cur", "play", "greed", "timid", "energy")
 
@@ -118,7 +122,7 @@ TRAIT_KEYS = ("agg", "soc", "cur", "play", "greed", "timid", "energy")
 ZONES = {
     "tetra": (0.10, 0.55), "goldfish": (0.25, 0.80), "tang": (0.15, 0.75),
     "angel": (0.12, 0.70), "betta": (0.08, 0.50), "puffer": (0.30, 0.85),
-    "catfish": (0.78, 1.00), "pleco": (0.85, 1.00),
+    "catfish": (0.78, 1.00), "pleco": (0.85, 1.00), "clown": (0.18, 0.70),
 }
 
 CALM_STATES = {"wander", "rest", "investigate", "school", "beg", "play", "to_glass"}
@@ -192,6 +196,10 @@ def make_genome(rng, arch=None):
         hue = rng.uniform(0.06, 0.13)
         sat = rng.uniform(0.35, 0.65)
         val = rng.uniform(0.45, 0.70)
+    elif arch == "clown":             # always orange
+        hue = rng.uniform(0.045, 0.085)
+        sat = rng.uniform(0.85, 0.98)
+        val = rng.uniform(0.90, 1.0)
     else:
         hue = rng.random()
         sat = rng.uniform(0.65, 0.95)
@@ -205,6 +213,7 @@ def make_genome(rng, arch=None):
         "puffer":   [("spots", 7), ("none", 3)],
         "catfish":  [("spots", 5), ("none", 4), ("bars", 1)],
         "pleco":    [("spots", 9), ("bars", 1)],
+        "clown":    [("clownbars", 1)],
     }[arch]
     names = [p for p, _ in patterns]
     pat = rng.choices(names, weights=[w for _, w in patterns])[0]
@@ -348,6 +357,17 @@ def render_fish_frame(g, phase, scale):
     elif pat == "twotone":
         pygame.draw.rect(ov, pc + (150,), pygame.Rect(int((cx - L / 2) * SS), int((cy - bh * 0.55) * SS),
                                                       int(L * SS), int(bh * 0.55 * SS)))
+    elif pat == "clownbars":   # three white bars with dark edges, like the real thing
+        for bx_f, bw_f in ((0.24, 0.10), (-0.02, 0.13), (-0.30, 0.09)):
+            bx = cx + bx_f * L
+            bw_ = bw_f * L
+            slant = bh * 0.06
+            for grow_, col in ((2.5, (26, 20, 16, 225)), (0.0, (248, 246, 240, 240))):
+                pts_ = [(bx - bw_ / 2 - grow_ + slant, cy - bh * 0.55),
+                        (bx + bw_ / 2 + grow_ + slant, cy - bh * 0.55),
+                        (bx + bw_ / 2 + grow_ - slant, cy + bh * 0.55),
+                        (bx - bw_ / 2 - grow_ - slant, cy + bh * 0.55)]
+                pygame.draw.polygon(ov, col, [P(*p) for p in pts_])
     ov.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     s.blit(ov, (0, 0))
 
@@ -387,8 +407,8 @@ def render_fish_frame(g, phase, scale):
     return pygame.transform.smoothscale(s, (W, H))
 
 
-def build_fish_frames(g, scale):
-    frames_r = [render_fish_frame(g, i / N_PHASES * TAU, scale) for i in range(N_PHASES)]
+def build_fish_frames(g, scale, n_phases=N_PHASES):
+    frames_r = [render_fish_frame(g, i / n_phases * TAU, scale) for i in range(n_phases)]
     frames_l = [pygame.transform.flip(f, True, False) for f in frames_r]
     return frames_r, frames_l
 
@@ -976,17 +996,22 @@ class Fish:
         g = self.g
         growth = 1 + min(self.age / 86400 / 10, 1.0) * 0.18
         self.scale = w.fish_scale * growth * g.get("mult", 1.0)
-        cap = w.water.h * 0.35
+        # a well-fed pleco can reach 0.3x the tank width; everyone else 0.35x water height
+        cap = w.water.w * PLECO_MAX_FRAC if g["arch"] == "pleco" else w.water.h * 0.35
         if g["len"] * self.scale > cap:
             self.scale = cap / g["len"]
         self.size = g["len"] * self.scale
-        self.frames_r, self.frames_l = build_fish_frames(g, self.scale)
+        n = N_PHASES if self.size < 420 else 8   # giants get fewer frames (memory)
+        self.frames_r, self.frames_l = build_fish_frames(g, self.scale, n)
         self.fw = self.frames_r[0].get_width()
         self.fh = self.frames_r[0].get_height()
         self.mouth_dx = self.fw / 2 - 5
         e = self.traits["energy"]
         self.cruise = (26 + self.size * 0.45) * (0.6 + e * 0.8) * g.get("speed_mult", 1.0)
+        if g["arch"] == "pleco":
+            self.cruise *= 0.55   # a lumbering giant, not a speedboat
         self.burst = self.cruise * 2.7
+        self._applied_mult = g.get("mult", 1.0)
         self.belly = None
         self._ckey = None
         self._csurf = None
@@ -997,6 +1022,18 @@ class Fish:
         self.g["speed_mult"] = round(min(self.g.get("speed_mult", 1.0) * factor, 6.0), 2)
         self.rebuild_sprites()
         self.w_ref.dirty = True
+
+    def feed_growth(self, amount):
+        """Plecos grow with every meal, up toward PLECO_MAX_FRAC of the tank width."""
+        if self.arch != "pleco":
+            return
+        g = self.g
+        g["fed"] = round(g.get("fed", 0.0) + amount, 2)
+        target = min(1.0 + g["fed"] * PLECO_GROW, 6.0)
+        g["mult"] = round(target, 3)
+        if abs(target - getattr(self, "_applied_mult", 1.0)) > 0.08:
+            self.rebuild_sprites()   # ~5% size steps, so no per-frame rebuilds
+            self.w_ref.dirty = True
 
     # ---------------- state helpers ----------------
     def set_state(self, name, dur, target=None, partner=None, rock=None, point=None, threat=None):
@@ -1109,6 +1146,7 @@ class Fish:
                 else:
                     spot["r"] -= 1.4 * dt
                     self.hunger = max(0.0, self.hunger - dt * 0.03)
+                    self.feed_growth(dt)
                     if spot["r"] <= 3:
                         w.algae.remove(spot)
                         w.particles.append(Puff(self.pos.x, self.pos.y, (110, 150, 100)))
@@ -1185,6 +1223,8 @@ class Fish:
             tp -= 9
         self.pitch += (tp - self.pitch) * min(1, dt * 6)
         rate = 3.2 + self.vel.length() * 0.05
+        if self.arch == "clown":
+            rate *= 1.3           # the trademark clownfish waddle
         if self.state == "display":
             rate *= 2.2
         if weak:
@@ -1405,7 +1445,8 @@ class Fish:
             pygame.draw.circle(s, (215, 200, 170),
                                (int(self.pos.x), int(self.pos.y - img.get_height() * 0.395)), mr, 2)
             return
-        idx = int(self.phase / TAU * N_PHASES) % N_PHASES
+        n = len(self.frames_r)
+        idx = int(self.phase / TAU * n) % n
         dead = self.state == "dead"
         alpha = 255
         if dead and self.death_t > DEAD_LINGER_S:
@@ -1774,7 +1815,7 @@ class Aquarium:
             return
         if vic.partner and vic.partner.partner is vic:
             vic.partner.partner = None
-        idx = int(vic.phase / TAU * N_PHASES) % N_PHASES
+        idx = int(vic.phase / TAU * len(vic.frames_r)) % len(vic.frames_r)
         img = vic.frames_r[idx] if vic.facing > 0 else vic.frames_l[idx]
         self.corpses.append(Halves(img, vic.pos))
         vic.remove = True
@@ -2010,6 +2051,7 @@ class Aquarium:
                         f.eat_pause = 0.25
                         if random.random() < 0.3:   # digestion is prompt
                             f.next_poop = min(f.next_poop, random.uniform(15, 50))
+                        f.feed_growth(4)
                         self.particles.append(Puff(p.pos.x, p.pos.y))
                         break
         self.pellets = [p for p in self.pellets if p.update(dt, self)]

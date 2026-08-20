@@ -56,7 +56,9 @@ right-click) works on mean fish too, if the reign of terror needs ending.
 Green algae spots grow on the front glass (a fresh tank already has a
 few patches going). Plecostomus catfish —
 which show up more often in an algae-covered tank — latch onto the glass
-belly-first, sucker mouth working, and rasp the spots clean.
+belly-first, sucker mouth working, and rasp the spots clean. And a
+pleco that keeps eating keeps growing — all the way up to nearly a third
+of the tank.
 
 Fish really do get hungry — feed them or they'll crowd the surface begging,
 and a truly neglected fish will not make it. (Away from the keyboard the

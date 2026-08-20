@@ -27,8 +27,9 @@ now; same stack as the weather-frame project.
 ## Architecture (all in aquarium.py)
 
 - Tunables live in the constants block at the top.
-- **Genome** (`make_genome`): archetype (tetra/goldfish/tang/angel/betta/
-  puffer/catfish) → body proportions, tail type, fins, HSV-derived colors,
+- **Genome** (`make_genome`): archetype (tetra/goldfish/tang/
+  angel/betta/puffer/catfish/pleco/clown — clowns always orange with
+  white "clownbars") → body proportions, tail type, fins, HSV-derived colors,
   pattern (bars/hstripe/spots/koi patches/twotone), personality traits
   (agg/soc/cur/play/greed/timid/energy — priors strongly species-typed,
   jitter ±0.10; puffers inflate ~25% when startled/fleeing), preferred
@@ -65,7 +66,10 @@ now; same stack as the weather-frame project.
   guarantees 3 visible patches on fresh tanks AND loaded saves — algae is
   drawn over fish because it is on the viewer's glass); plecos take `to_glass` → `suck`
   states, drawn belly-first (`build_pleco_belly`) in the glass layer above
-  the algae, shrinking spots as they eat. Sucking plecos can't be hunted.
+  the algae, shrinking spots as they eat. Sucking plecos can't be hunted. Every meal (algae seconds, pellets)
+  feeds `Fish.feed_growth`: `g["fed"]` -> `g["mult"]` (PLECO_GROW per
+  food unit), body capped at PLECO_MAX_FRAC (0.3) of tank width;
+  sprites rebuild at ~5% size steps, giants drop to 8 anim frames.
 - **World**: pellets sink, rest on sand, rot into `murk` (green haze that
   decays — overfeeding lesson); clams breathe on sines, snap when startled,
   filter-feed pellets; rocks pre-render seeded blob polygons (40% draw in
