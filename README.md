@@ -39,6 +39,9 @@ Big buttons along the bottom:
 Tap the water and curious fish come investigate. Tap a fish to see its
 name. Tap a clam to make it snap. Tap a rock to flick a pebble.
 
+**Right-click** (two-finger click on the trackpad) a fish, rock, or clam
+to take exactly that one out — handy for designing the tank.
+
 Fish really do get hungry — feed them or they'll crowd the surface begging,
 and a truly neglected fish will not make it. (Away from the keyboard the
 tank is merciful: fish get hungry while the app is closed, but nothing ever

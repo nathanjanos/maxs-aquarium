@@ -15,7 +15,9 @@ now; same stack as the weather-frame project.
   test window, `--reset` for a fresh tank, `--seed N`, `--debug` (fps/counts
   overlay, toggle with D at runtime), `--save-file PATH`, and dev flags
   `--frames N --shot PATH` (run N frames headless-friendly, screenshot,
-  exit). Keys: SPACE feed, D debug, ESC/Q quit.
+  exit). Keys: SPACE feed, D debug, ESC/Q quit. Right-click removes the
+  specific fish/rock/clam under the cursor (design mode); the − buttons
+  remove floaters-first/newest.
 - `aquarium_save.json` — persistent tank state (gitignored). Written
   atomically every 25 s and on quit.
 - `.venv` — python3 + **pygame-ce** (NOT stock pygame: it has no wheels for
@@ -28,7 +30,9 @@ now; same stack as the weather-frame project.
 - **Genome** (`make_genome`): archetype (tetra/goldfish/tang/angel/betta/
   puffer/catfish) → body proportions, tail type, fins, HSV-derived colors,
   pattern (bars/hstripe/spots/koi patches/twotone), personality traits
-  (agg/soc/cur/play/greed/timid/energy), preferred depth zone. Pure JSON
+  (agg/soc/cur/play/greed/timid/energy — priors strongly species-typed,
+  jitter ±0.10; puffers inflate ~25% when startled/fleeing), preferred
+  depth zone. Pure JSON
   primitives so saved fish rebuild identically (`pseed` seeds detail RNG).
 - **Sprites**: `render_fish_frame` draws each fish at 2x supersample and
   smoothscales down; N_PHASES=14 tail-sway frames pre-rendered per fish at
@@ -51,7 +55,7 @@ now; same stack as the weather-frame project.
 - **World**: pellets sink, rest on sand, rot into `murk` (green haze that
   decays — overfeeding lesson); clams breathe on sines, snap when startled,
   filter-feed pellets; rocks pre-render seeded blob polygons (30% draw in
-  front of fish for depth); sand level animates toward its target and
+  front of fish for depth; ~28% are tall standing stones); sand level animates toward its target and
   everything on it rides along (`sand_top(x)` includes seeded dunes).
 - **Rendering order**: water gradient → additive light rays → sand → back
   rocks → clams → pellets → fish → particles → front rocks → murk → air gap

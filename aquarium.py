@@ -93,16 +93,20 @@ ARCHETYPES = {
 ARCH_WEIGHTS = {"tetra": 22, "goldfish": 16, "tang": 14, "angel": 12,
                 "betta": 10, "puffer": 12, "catfish": 14}
 
-# personality priors per archetype (jittered per fish): 0..1
+# personality priors per archetype: 0..1. Deliberately far apart so each
+# species has a strong, recognizable temperament (per-fish jitter is small):
+# bettas duel, tetras school, tangs zoom and play, angels are stately bullies,
+# puffers are curious clowns (and puff up when startled), goldfish are
+# bottomless stomachs, catfish are lazy bottom vacuums.
 TRAIT_PRIORS = {
     #            agg   soc   cur   play  greed timid energy
-    "tetra":    (0.10, 0.90, 0.50, 0.50, 0.50, 0.70, 0.80),
-    "goldfish": (0.15, 0.50, 0.60, 0.40, 0.95, 0.40, 0.50),
-    "tang":     (0.45, 0.40, 0.60, 0.60, 0.50, 0.30, 0.80),
-    "angel":    (0.55, 0.35, 0.50, 0.30, 0.50, 0.30, 0.50),
-    "betta":    (0.90, 0.15, 0.55, 0.35, 0.50, 0.15, 0.55),
-    "puffer":   (0.30, 0.30, 0.90, 0.80, 0.70, 0.35, 0.45),
-    "catfish":  (0.05, 0.30, 0.40, 0.25, 0.80, 0.60, 0.30),
+    "tetra":    (0.05, 0.95, 0.50, 0.50, 0.45, 0.80, 0.85),
+    "goldfish": (0.10, 0.50, 0.60, 0.40, 1.00, 0.40, 0.45),
+    "tang":     (0.50, 0.40, 0.65, 0.70, 0.50, 0.25, 0.90),
+    "angel":    (0.65, 0.30, 0.50, 0.25, 0.50, 0.25, 0.45),
+    "betta":    (0.97, 0.10, 0.55, 0.30, 0.50, 0.10, 0.55),
+    "puffer":   (0.25, 0.30, 0.95, 0.90, 0.70, 0.40, 0.45),
+    "catfish":  (0.03, 0.30, 0.40, 0.20, 0.85, 0.65, 0.20),
 }
 TRAIT_KEYS = ("agg", "soc", "cur", "play", "greed", "timid", "energy")
 
@@ -215,7 +219,7 @@ def make_genome(rng, arch=None):
     g["pat_col"] = pat_col
     # ---- personality ----
     priors = TRAIT_PRIORS[arch]
-    g["traits"] = {k: round(clamp(p + rng.uniform(-0.18, 0.18), 0.02, 1.0), 3)
+    g["traits"] = {k: round(clamp(p + rng.uniform(-0.10, 0.10), 0.02, 1.0), 3)
                    for k, p in zip(TRAIT_KEYS, priors)}
     g["zone"] = list(ZONES[arch])
     return g
@@ -581,8 +585,12 @@ class Rock:
             col = hsv(0.0, 0.0, rng.uniform(0.28, 0.48))
         else:
             col = hsv(rng.uniform(0.55, 0.62), rng.uniform(0.10, 0.25), rng.uniform(0.28, 0.45))
-        rx = self.size / 2
-        ry = rx * rng.uniform(0.55, 0.80)
+        if rng.random() < 0.28:   # occasionally a tall standing stone
+            rx = self.size * rng.uniform(0.22, 0.30)
+            ry = self.size * rng.uniform(0.52, 0.72)
+        else:
+            rx = self.size / 2
+            ry = rx * rng.uniform(0.55, 0.80)
         n = rng.randint(9, 13)
         pts = []
         for i in range(n):
@@ -790,6 +798,7 @@ class Fish:
         self.next_poop = random.uniform(200, 520)
         self.beg_pt = None
         self.beg_next = 0.0
+        self.puff = 1.0           # puffer inflation factor
         e = self.traits["energy"]
         self.cruise = (26 + self.size * 0.45) * (0.6 + e * 0.8)
         self.burst = self.cruise * 2.7
@@ -879,6 +888,9 @@ class Fish:
         weak = self.health < 30
         if self.eat_pause > 0:
             self.eat_pause -= dt
+        if self.arch == "puffer":  # puff up when startled or fleeing
+            tgt = 1.25 if self.state in ("flee", "startle") else 1.0
+            self.puff += (tgt - self.puff) * min(1, dt * 5)
         if self.next_poop > 0:
             self.next_poop -= dt
             if self.next_poop <= 0:
@@ -1154,12 +1166,15 @@ class Fish:
         angle = round((self.pitch * self.facing) / 4) * 4
         if dead:
             angle = round(math.sin(w.t * 0.9 + self.id) * 8 / 4) * 4
-        key = (idx, self.facing, angle, alpha // 16, dead)
+        pf = round(self.puff, 2)
+        key = (idx, self.facing, angle, alpha // 16, dead, pf)
         if key != self._ckey:
             img = self.frames_r[idx] if self.facing > 0 else self.frames_l[idx]
             if dead:
                 img = pygame.transform.flip(img, False, True)
             img = pygame.transform.rotate(img, angle)
+            if pf > 1.02:
+                img = pygame.transform.smoothscale_by(img, pf)
             if alpha < 255:
                 img = img.copy()
                 img.set_alpha(alpha)
@@ -1253,6 +1268,29 @@ class Aquarium:
         self.ray_surf = pygame.transform.rotate(ray, -16)
         self.murk_surf = pygame.Surface((self.water.w, self.water.h - (self.waterline - self.water.top)))
         self.murk_surf.fill((64, 82, 38))
+        # playful plaque: per-letter colored glyphs + little fish bookends
+        pal = [(255, 138, 128), (255, 209, 102), (128, 222, 234),
+               (206, 147, 216), (165, 214, 167), (255, 171, 145), (129, 212, 250)]
+        psz = int(clamp(b * 1.1, 26, 56))
+        pfont = font(psz)
+        self.plaque = []
+        x = 0.0
+        ci = 0
+        for ch in "MAX'S AQUARIUM":
+            if ch == " ":
+                x += psz * 0.45
+                continue
+            gs = pfont.render(ch, True, pal[ci % len(pal)])
+            self.plaque.append((gs, x, ci))
+            x += gs.get_width() + psz * 0.10
+            ci += 1
+        self.plaque_w = x - psz * 0.10
+        self.plaque_h = pfont.get_height()
+        fh = int(psz * 0.95)
+        bk = pygame.Surface((int(fh * 1.7), fh), pygame.SRCALPHA)
+        icon_fish(bk, bk.get_rect(), (255, 209, 102))
+        self.plaque_fish_l = bk                                    # faces right
+        self.plaque_fish_r = pygame.transform.flip(bk, True, False)
 
     def _seed_layout(self):
         rng = random.Random(self.seed)
@@ -1321,9 +1359,10 @@ class Aquarium:
         self.dirty = True
         return f
 
-    def remove_fish(self):
-        dead = [f for f in self.fish if f.state == "dead"]
-        pick = dead[0] if dead else next((f for f in reversed(self.fish) if not f.gone()), None)
+    def remove_fish(self, pick=None):
+        if pick is None:
+            dead = [f for f in self.fish if f.state == "dead"]
+            pick = dead[0] if dead else next((f for f in reversed(self.fish) if not f.gone()), None)
         if pick is None:
             return
         if pick.partner and pick.partner.partner is pick:
@@ -1341,7 +1380,7 @@ class Aquarium:
             d = min([abs(xf - r.x_frac) for r in self.rocks] + [1.0])
             if d > best_d:
                 best, best_d = xf, d
-        size = random.uniform(46, 150) * self.fish_scale
+        size = random.uniform(40, 210) * self.fish_scale
         r = Rock(best, size, random.randrange(1 << 30), front=random.random() < 0.3)
         self.rocks.append(r)
         if not quiet:
@@ -1351,10 +1390,11 @@ class Aquarium:
                 self.particles.append(Puff(x + random.uniform(-20, 20), self.sand_top(x) - 6, dim(SAND_COLOR, 0.9)))
         self.dirty = True
 
-    def remove_rock(self):
+    def remove_rock(self, rock=None):
         if not self.rocks:
             return
-        r = self.rocks.pop()
+        r = rock if rock in self.rocks else self.rocks[-1]
+        self.rocks.remove(r)
         x = self.water.left + r.x_frac * self.water.w
         for _ in range(4):
             self.particles.append(Puff(x + random.uniform(-16, 16), self.sand_top(x) - 8, dim(SAND_COLOR, 0.9)))
@@ -1376,10 +1416,11 @@ class Aquarium:
             self.announce(V2(x, self.sand_top(x) - 50), kind="object")
         self.dirty = True
 
-    def remove_clam(self):
+    def remove_clam(self, clam=None):
         if not self.clams:
             return
-        c = self.clams.pop()
+        c = clam if clam in self.clams else self.clams[-1]
+        self.clams.remove(c)
         hx, hy = c.hinge(self)
         for _ in range(3):
             self.particles.append(Bubble(hx + random.uniform(-8, 8), hy - 10))
@@ -1686,6 +1727,28 @@ class Aquarium:
                                          r=random.uniform(1.2, 2.6)))
         self.announce(pos, kind="tap")
 
+    def right_click(self, pos):
+        """Design mode: remove exactly the fish, clam, or rock under the cursor."""
+        pos = V2(pos)
+        if not self.water.collidepoint(pos):
+            return
+        for f in sorted(self.fish, key=lambda f: f.pos.distance_to(pos)):
+            if f.remove or f.state == "netted":
+                continue
+            if f.pos.distance_to(pos) < max(30, f.size * 0.55):
+                self.remove_fish(pick=f)
+                return
+        for c in self.clams:
+            hx, hy = c.hinge(self)
+            if abs(pos.x - hx) < c.size and abs(pos.y - hy + c.size * 0.4) < c.size:
+                self.remove_clam(clam=c)
+                return
+        for r in self.rocks:
+            rx, ry = r.center(self)
+            if abs(pos.x - rx) < r.w * 0.5 and ry - r.h < pos.y < ry:
+                self.remove_rock(rock=r)
+                return
+
     # ---------------- drawing ----------------
     def draw(self, screen):
         t = self.t
@@ -1728,9 +1791,17 @@ class Aquarium:
         pygame.draw.rect(screen, (46, 56, 64), self.tank, self.glass)
         pygame.draw.rect(screen, (96, 116, 128), self.tank, 1)
         pygame.draw.rect(screen, (118, 142, 155), self.tank.inflate(-2 * self.glass + 2, -2 * self.glass + 2), 1)
-        # plaque
-        label = font(max(16, int(self.border * 0.55))).render("M A X ' S   A Q U A R I U M", True, (146, 128, 88))
-        screen.blit(label, (self.tank.centerx - label.get_width() // 2, self.tank.bottom + 5))
+        # plaque: bobbing rainbow letters with fish bookends
+        px0 = self.tank.centerx - self.plaque_w / 2
+        py = self.tank.bottom + 4
+        for gs, xo, ci in self.plaque:
+            bob = math.sin(t * 1.6 + ci * 0.7) * 2.2
+            screen.blit(gs, (int(px0 + xo), int(py + bob)))
+        fy = py + self.plaque_h * 0.22
+        screen.blit(self.plaque_fish_l,
+                    (int(px0 - self.plaque_fish_l.get_width() - 16), int(fy + math.sin(t * 1.3) * 2)))
+        screen.blit(self.plaque_fish_r,
+                    (int(px0 + self.plaque_w + 16), int(fy + math.sin(t * 1.3 + 1.5) * 2)))
         # name pills
         for f, until in self.pills:
             self.draw_pill(screen, f, until)
@@ -2006,6 +2077,9 @@ class App:
                     self.held_t = self.aq.t + 0.5
                 else:
                     self.aq.click(ev.pos)
+            elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3:
+                self.mouse_idle = 0
+                self.aq.right_click(ev.pos)
             elif ev.type == pygame.MOUSEBUTTONUP:
                 self.held = None
             elif ev.type == pygame.MOUSEMOTION:
