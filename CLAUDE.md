@@ -85,6 +85,12 @@ now; same stack as the weather-frame project.
   loitering near ≥2 neighbors triggers `Aquarium.scatter` — a dart away
   from the local centroid toward the far side of the tank (staggered
   per-fish limits so huddles pop one fish at a time).
+- Algae/pleco gotchas (each cost a debug session): spots must spawn ABOVE
+  the sand line and pleco spot-selection must filter unreachable ones
+  (body clearance) or plecos hover at the sand forever; plecos must skip
+  the hungry-pellet interrupt while algae exists or a fed tank keeps them
+  off the glass permanently; one pleco per spot (`claimed_spots`) or they
+  pile up. Name pills show "Name" + "(species)" — "(mean X)" in red.
 - Pleco pacing gotcha (fixed once): cruise damp must scale with size
   (only giants lumber), floor clearance 0.10 like catfish, and `to_glass`
   skips top/floor wall-avoidance with a ≥60 px/s approach floor and

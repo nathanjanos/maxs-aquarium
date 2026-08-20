@@ -122,6 +122,13 @@ TRAIT_PRIORS = {
 }
 TRAIT_KEYS = ("agg", "soc", "cur", "play", "greed", "timid", "energy")
 
+ARCH_LABELS = {
+    "tetra": "tetra", "goldfish": "goldfish", "tang": "tang",
+    "angel": "angelfish", "betta": "betta", "puffer": "pufferfish",
+    "catfish": "catfish", "pleco": "plecostomus", "clown": "clownfish",
+    "seahorse": "seahorse",
+}
+
 # preferred vertical band (fraction of swimmable height)
 ZONES = {
     "tetra": (0.10, 0.55), "goldfish": (0.25, 0.80), "tang": (0.15, 0.75),
@@ -1293,7 +1300,7 @@ class Fish:
             self.vel = V2(0, 0)
             spot = self.target
             if not any(sp is spot for sp in w.algae):
-                spot = w.nearest_algae(self.pos)
+                spot = w.nearest_algae(self.pos, for_fish=self)
                 self.target = spot
             if spot is not None:
                 goal = V2(spot["x"], spot["y"])
@@ -1844,9 +1851,10 @@ class Aquarium:
             return None
         self.fish_added += 1
         mean = self.fish_added % MEAN_EVERY == 0
-        if arch is None and not mean and self.algae \
-                and random.random() < 0.10 + 0.30 * len(self.algae) / MAX_ALGAE:
-            arch = "pleco"   # a dirty tank attracts plecos
+        n_plecos = sum(1 for f in self.fish if f.arch == "pleco" and not f.gone())
+        if arch is None and not mean and self.algae and n_plecos < 2 \
+                and random.random() < 0.08 + 0.22 * len(self.algae) / MAX_ALGAE:
+            arch = "pleco"   # a dirty tank attracts plecos (but never a horde)
         if mean and arch in (None, "pleco", "seahorse"):   # mean fish are swimmers
             names = [n for n in ARCH_WEIGHTS if n not in ("pleco", "seahorse")]
             arch = random.choices(names, weights=[ARCH_WEIGHTS[n] for n in names])[0]
@@ -1995,8 +2003,15 @@ class Aquarium:
 
     # ---------------- algae ----------------
     def spawn_algae(self):
-        x = random.uniform(self.water.left + 40, self.water.right - 40)
-        y = random.uniform(self.waterline + 40, self.water.bottom - 30)
+        best, best_d = None, -1
+        for _ in range(8):   # spread spots out, and keep them above the sand (reachable)
+            cx_ = random.uniform(self.water.left + 40, self.water.right - 40)
+            cy_ = random.uniform(self.waterline + 40,
+                                 max(self.waterline + 60, self.sand_top(cx_) - 24))
+            d = min([V2(cx_ - a["x"], cy_ - a["y"]).length() for a in self.algae] + [9e9])
+            if d > best_d:
+                best, best_d = (cx_, cy_), d
+        x, y = best
         mr = random.uniform(16, 55) * clamp(self.fish_scale, 0.7, 1.4)
         self.algae.append(self._make_spot(x, y, 4.0, mr, random.uniform(0.15, 0.40),
                                           random.randrange(1 << 30)))
@@ -2025,9 +2040,22 @@ class Aquarium:
                 return f
         return None
 
-    def nearest_algae(self, pos):
+    def claimed_spots(self, except_fish=None):
+        """Algae spots another pleco is already working (one pleco per spot)."""
+        out = set()
+        for f in self.fish:
+            if f is except_fish or f.arch != "pleco" or f.gone():
+                continue
+            if f.state in ("to_glass", "suck") and isinstance(f.target, dict):
+                out.add(id(f.target))
+        return out
+
+    def nearest_algae(self, pos, for_fish=None):
+        taken = self.claimed_spots(except_fish=for_fish)
         best, bd = None, 1e18
         for a in self.algae:
+            if id(a) in taken or a["r"] < 6 or a["y"] >= self.sand_top(a["x"]) - 14:
+                continue
             d = (pos - V2(a["x"], a["y"])).length_squared()
             if d < bd:
                 best, bd = a, d
@@ -2178,6 +2206,8 @@ class Aquarium:
         alive = [f for f in self.fish if not f.gone()]
         # hungry fish notice food
         for f in alive:
+            if f.arch == "pleco" and self.algae:
+                continue   # plecos would rather rasp the glass than chase pellets
             hthr = 0.42 - f.traits["greed"] * 0.22
             if f.hunger > hthr and f.state in (CALM_STATES - {"to_glass"}) | {"circle"}:
                 p = self.nearest_pellet(f.pos, prefer_resting=(f.arch in ("catfish", "pleco")))
@@ -2234,9 +2264,13 @@ class Aquarium:
                 continue
             if f.arch == "pleco" and f.state in ("wander", "rest") and self.algae \
                     and random.random() < 0.45:
-                spot = max(self.algae, key=lambda a: a["r"])
-                f.set_state("to_glass", 40, target=spot)
-                continue
+                taken = self.claimed_spots(except_fish=f)
+                free = [a for a in self.algae if a["r"] >= 8 and id(a) not in taken
+                        and a["y"] < self.sand_top(a["x"]) - 14]
+                if free:   # nearest big-ish spot nobody else has claimed
+                    spot = min(free, key=lambda a: abs(a["x"] - f.pos.x) - a["r"] * 6)
+                    f.set_state("to_glass", 40, target=spot)
+                    continue
             if f.arch == "seahorse":
                 mate = self._fish_by_id(f.g.get("mate"))
                 if mate is None or mate.gone():
@@ -2603,10 +2637,15 @@ class Aquarium:
     def draw_pill(self, screen, f, until):
         fade = clamp((until - self.t) / 0.4, 0, 1)
         txt = font(26).render(f.name, True, (235, 240, 245))
-        pw, ph = txt.get_width() + 18, txt.get_height() + 8
+        mean = f.g.get("mean")
+        kind = ("mean " if mean else "") + ARCH_LABELS.get(f.arch, f.arch)
+        sub = font(19).render(f"({kind})", True, (225, 130, 118) if mean else (168, 178, 188))
+        pw = max(txt.get_width(), sub.get_width()) + 20
+        ph = txt.get_height() + sub.get_height() + 10
         pill = pygame.Surface((pw, ph), pygame.SRCALPHA)
-        pygame.draw.rect(pill, (10, 14, 18, 185), (0, 0, pw, ph), border_radius=ph // 2)
-        pill.blit(txt, (9, 4))
+        pygame.draw.rect(pill, (10, 14, 18, 185), (0, 0, pw, ph), border_radius=12)
+        pill.blit(txt, ((pw - txt.get_width()) // 2, 4))
+        pill.blit(sub, ((pw - sub.get_width()) // 2, 4 + txt.get_height()))
         pill.set_alpha(int(255 * fade))
         x = clamp(f.pos.x - pw / 2, self.water.left + 6, self.water.right - pw - 6)
         y = clamp(f.pos.y - f.fh / 2 - ph - 8, self.water.top + 4, self.water.bottom - ph)
