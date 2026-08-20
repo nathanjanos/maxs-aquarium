@@ -52,6 +52,18 @@ now; same stack as the weather-frame project.
   visibly weak (slow, droopy, faded). Dead fish float up belly-up, linger
   ~24 s, fade. Offline time only adds hunger (capped 0.95) — no off-screen
   death, by design.
+- **Mean fish**: every `MEAN_EVERY`th (10th) fish added has `g["mean"]` —
+  red eyes + angry brow, 1.5x speed, no friendships. They hunt on a
+  cooldown (`cool["hunt"]`); catching a normal fish calls `Aquarium.bite`:
+  the victim's current frame is split into a `Halves` corpse (tumbles to
+  the surface, fades ~10 s), every non-mean fish gets `cry_t` (Tear
+  particles) and nearby ones scatter. Mean-vs-mean duels reuse the display
+  state; the loser is bitten, the winner `grow(2)`s (size and speed double,
+  capped: mult ≤ 4, body ≤ 35% of water height — `rebuild_sprites`).
+- **Pleco + algae**: algae spots grow on the front glass (`Aquarium.algae`,
+  spawn ~30 s apart, cap MAX_ALGAE); plecos take `to_glass` → `suck`
+  states, drawn belly-first (`build_pleco_belly`) in the glass layer above
+  the algae, shrinking spots as they eat. Sucking plecos can't be hunted.
 - **World**: pellets sink, rest on sand, rot into `murk` (green haze that
   decays — overfeeding lesson); clams breathe on sines, snap when startled,
   filter-feed pellets; rocks pre-render seeded blob polygons (30% draw in

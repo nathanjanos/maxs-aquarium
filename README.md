@@ -42,6 +42,21 @@ name. Tap a clam to make it snap. Tap a rock to flick a pebble.
 **Right-click** (two-finger click on the trackpad) a fish, rock, or clam
 to take exactly that one out — handy for designing the tank.
 
+## Beware the mean fish
+
+Every 10th fish that joins the tank is a **mean fish** — you'll know it by
+the red eyes. Mean fish patrol fast, and they bite other fish clean in
+half (the halves float sadly to the surface while every other fish sheds
+a few tears). If two mean fish go after each other they fight it out, and
+the winner comes out twice as big and twice as fast. The net (or a
+right-click) works on mean fish too, if the reign of terror needs ending.
+
+## Algae and the plecostomus
+
+Green algae spots slowly grow on the front glass. Plecostomus catfish —
+which show up more often in an algae-covered tank — latch onto the glass
+belly-first, sucker mouth working, and rasp the spots clean.
+
 Fish really do get hungry — feed them or they'll crowd the surface begging,
 and a truly neglected fish will not make it. (Away from the keyboard the
 tank is merciful: fish get hungry while the app is closed, but nothing ever

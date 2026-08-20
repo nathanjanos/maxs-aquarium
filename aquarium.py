@@ -47,6 +47,8 @@ MAX_CLAMS         = 8
 SAND_STEPS        = 8          # button presses from bare glass to full sand
 MAX_SAND_FRAC     = 0.26       # of water height
 MAX_PELLETS       = 90
+MAX_ALGAE         = 12
+MEAN_EVERY        = 10         # every Nth fish added is a mean one
 
 HUNGER_FULL_S     = 360.0      # seconds from fed to fully hungry
 STARVE_GRACE_S    = 240.0      # seconds at full hunger before health drains
@@ -89,9 +91,10 @@ ARCHETYPES = {
     "betta":    dict(ln=(56, 114), ratio=(0.38, 0.50), tail="flowy",    tl=(0.60, 0.90), sp=(0.55, 0.75), do=(0.45, 0.70), an=(0.40, 0.60), eye=(0.10, 0.13)),
     "puffer":   dict(ln=(48, 106),  ratio=(0.82, 0.98), tail="round",    tl=(0.22, 0.30), sp=(0.35, 0.45), do=(0.18, 0.28), an=(0.14, 0.22), eye=(0.16, 0.21)),
     "catfish":  dict(ln=(78, 166), ratio=(0.34, 0.44), tail="fork",     tl=(0.26, 0.34), sp=(0.40, 0.50), do=(0.25, 0.38), an=(0.16, 0.24), eye=(0.09, 0.12)),
+    "pleco":    dict(ln=(100, 170), ratio=(0.30, 0.38), tail="fork",    tl=(0.24, 0.32), sp=(0.42, 0.52), do=(0.55, 0.85), an=(0.14, 0.20), eye=(0.09, 0.11)),
 }
 ARCH_WEIGHTS = {"tetra": 22, "goldfish": 16, "tang": 14, "angel": 12,
-                "betta": 10, "puffer": 12, "catfish": 14}
+                "betta": 10, "puffer": 12, "catfish": 14, "pleco": 8}
 
 # personality priors per archetype: 0..1. Deliberately far apart so each
 # species has a strong, recognizable temperament (per-fish jitter is small):
@@ -107,6 +110,7 @@ TRAIT_PRIORS = {
     "betta":    (0.97, 0.10, 0.55, 0.30, 0.50, 0.10, 0.55),
     "puffer":   (0.25, 0.30, 0.95, 0.90, 0.70, 0.40, 0.45),
     "catfish":  (0.03, 0.30, 0.40, 0.20, 0.85, 0.65, 0.20),
+    "pleco":    (0.02, 0.20, 0.30, 0.10, 0.90, 0.50, 0.15),
 }
 TRAIT_KEYS = ("agg", "soc", "cur", "play", "greed", "timid", "energy")
 
@@ -114,10 +118,10 @@ TRAIT_KEYS = ("agg", "soc", "cur", "play", "greed", "timid", "energy")
 ZONES = {
     "tetra": (0.10, 0.55), "goldfish": (0.25, 0.80), "tang": (0.15, 0.75),
     "angel": (0.12, 0.70), "betta": (0.08, 0.50), "puffer": (0.30, 0.85),
-    "catfish": (0.78, 1.00),
+    "catfish": (0.78, 1.00), "pleco": (0.85, 1.00),
 }
 
-CALM_STATES = {"wander", "rest", "investigate", "school", "beg", "play"}
+CALM_STATES = {"wander", "rest", "investigate", "school", "beg", "play", "to_glass"}
 
 
 # ----------------------------------------------------------------------------
@@ -138,7 +142,7 @@ def hsv(h, s, v):
 
 
 def dim(col, f):
-    return tuple(int(c * f) for c in col[:3])
+    return tuple(min(255, int(c * f)) for c in col[:3])
 
 
 _FONTS = {}
@@ -184,7 +188,7 @@ def make_genome(rng, arch=None):
         "pseed": rng.randrange(1 << 30),
     }
     # ---- colors ----
-    if arch == "catfish":  # earth tones
+    if arch in ("catfish", "pleco"):  # earth tones
         hue = rng.uniform(0.06, 0.13)
         sat = rng.uniform(0.35, 0.65)
         val = rng.uniform(0.45, 0.70)
@@ -200,6 +204,7 @@ def make_genome(rng, arch=None):
         "betta":    [("none", 4), ("twotone", 4), ("spots", 2)],
         "puffer":   [("spots", 7), ("none", 3)],
         "catfish":  [("spots", 5), ("none", 4), ("bars", 1)],
+        "pleco":    [("spots", 9), ("bars", 1)],
     }[arch]
     names = [p for p, _ in patterns]
     pat = rng.choices(names, weights=[w for _, w in patterns])[0]
@@ -350,13 +355,21 @@ def render_fish_frame(g, phase, scale):
     pygame.draw.arc(s, dim(base, 0.55), pygame.Rect(int((cx + L * 0.05) * SS), int((cy - bh * 0.42) * SS),
                                                     int(L * 0.30 * SS), int(bh * 0.84 * SS)),
                     -1.1, 1.1, max(1, int(1.2 * SS)))
+    mean = g.get("mean")
     ex, ey = cx + L * 0.315, cy - bh * 0.10
     er = bh * g["eye"]
-    ell(s, (238, 238, 232), ex, ey, er * 2.6, er * 2.6)
-    ell(s, (18, 20, 28), ex + er * 0.3, ey, er * 1.7, er * 1.7)
+    ell(s, (255, 226, 222) if mean else (238, 238, 232), ex, ey, er * 2.6, er * 2.6)
+    ell(s, (198, 22, 26) if mean else (18, 20, 28), ex + er * 0.3, ey, er * 1.7, er * 1.7)
     ell(s, (255, 255, 255), ex + er * 0.55, ey - er * 0.45, er * 0.7, er * 0.7)
-    pygame.draw.line(s, dim(base, 0.4), P(x1 - L * 0.055, cy + bh * 0.10), P(x1 - L * 0.005, cy + bh * 0.04),
-                     max(1, int(1.4 * SS)))
+    if mean:  # angry brow
+        pygame.draw.line(s, (30, 12, 12), P(ex - er * 1.7, ey - er * 2.2), P(ex + er * 1.1, ey - er * 1.1),
+                         max(2, int(1.8 * SS)))
+    if g["arch"] == "pleco":  # sucker mouth
+        ell(s, dim(base, 0.5), x1 - L * 0.05, cy + bh * 0.15, bh * 0.24, bh * 0.17)
+        ell(s, tuple(g["belly"]), x1 - L * 0.05, cy + bh * 0.15, bh * 0.13, bh * 0.09)
+    else:
+        pygame.draw.line(s, dim(base, 0.4), P(x1 - L * 0.055, cy + bh * 0.10), P(x1 - L * 0.005, cy + bh * 0.04),
+                         max(1, int(1.4 * SS)))
 
     # ---- front overlay: pectoral fin, whiskers (kept translucent via blit) ----
     front = pygame.Surface(s.get_size(), pygame.SRCALPHA)
@@ -378,6 +391,49 @@ def build_fish_frames(g, scale):
     frames_r = [render_fish_frame(g, i / N_PHASES * TAU, scale) for i in range(N_PHASES)]
     frames_l = [pygame.transform.flip(f, True, False) for f in frames_r]
     return frames_r, frames_l
+
+
+def build_pleco_belly(g, scale):
+    """Front-glass view of a plecostomus: belly, splayed fins, sucker mouth."""
+    L = g["len"] * scale
+    W = int(L * 0.55)
+    H = int(L)
+    s = pygame.Surface((W * SS, H * SS), pygame.SRCALPHA)
+    rng = random.Random(g["pseed"] ^ 0xB)
+    base = dim(g["base"], 0.95)
+    fin = tuple(g["fin"]) + (175,)
+    cx = W / 2
+
+    def P2(x, y):
+        return (x * SS, y * SS)
+
+    def E(col, x, y, w_, h_):
+        pygame.draw.ellipse(s, col, pygame.Rect(int((x - w_ / 2) * SS), int((y - h_ / 2) * SS),
+                                                max(1, int(w_ * SS)), max(1, int(h_ * SS))))
+
+    for sgn in (-1, 1):   # splayed pectoral + ventral fins
+        pygame.draw.polygon(s, fin, [P2(cx + sgn * W * 0.16, H * 0.30),
+                                     P2(cx + sgn * W * 0.62, H * 0.22),
+                                     P2(cx + sgn * W * 0.50, H * 0.44)])
+        pygame.draw.polygon(s, fin, [P2(cx + sgn * W * 0.14, H * 0.60),
+                                     P2(cx + sgn * W * 0.52, H * 0.58),
+                                     P2(cx + sgn * W * 0.40, H * 0.74)])
+    pygame.draw.polygon(s, fin, [P2(cx - W * 0.20, H * 0.86), P2(cx + W * 0.20, H * 0.86),
+                                 P2(cx + W * 0.28, H * 0.99), P2(cx - W * 0.28, H * 0.99)])
+    E(dim(base, 0.5), cx, H * 0.47, W * 0.70, H * 0.90)
+    E(base, cx, H * 0.47, W * 0.66, H * 0.86)
+    E(dim(tuple(g["belly"]), 0.95), cx, H * 0.52, W * 0.44, H * 0.60)
+    for _ in range(rng.randint(10, 18)):
+        E(dim(base, 0.55), cx + rng.uniform(-0.30, 0.30) * W, H * rng.uniform(0.10, 0.85),
+          W * 0.055, W * 0.05)
+    # sucker mouth at the head end
+    E(dim(base, 0.45), cx, H * 0.105, W * 0.36, W * 0.27)
+    E((208, 192, 162), cx, H * 0.105, W * 0.26, W * 0.19)
+    E(dim(base, 0.35), cx, H * 0.105, W * 0.11, W * 0.085)
+    for sgn in (-1, 1):   # little eyes
+        E((16, 16, 22), cx + sgn * W * 0.18, H * 0.175, W * 0.075, W * 0.075)
+        E((255, 255, 255), cx + sgn * W * 0.18 + W * 0.015, H * 0.170, W * 0.025, W * 0.025)
+    return pygame.transform.smoothscale(s, (W, H))
 
 
 # ----------------------------------------------------------------------------
@@ -517,6 +573,69 @@ class Speck:  # ahem. fish happen.
     def draw(self, s, w):
         if self.t < 12 or int(self.t * 8) % 2:
             pygame.draw.circle(s, (96, 78, 52), (int(self.x), int(self.y)), 1)
+
+
+class Tear:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.vx = random.uniform(-8, 8)
+        self.t = 0.0
+
+    def update(self, dt, w):
+        self.t += dt
+        self.y += (24 + self.t * 20) * dt
+        self.x += self.vx * dt
+        return self.t < 1.3
+
+    def draw(self, s, w):
+        f = 1 - self.t / 1.3
+        col = dim((160, 215, 255), 0.45 + 0.55 * f)
+        pygame.draw.circle(s, col, (int(self.x), int(self.y)), 2)
+        pygame.draw.circle(s, dim(col, 1.2), (int(self.x), int(self.y) - 2), 1)
+
+
+class Halves:
+    """A fish bitten clean in half; both halves tumble up to the surface and fade."""
+    LINGER = 8.0
+    FADE = 2.5
+
+    def __init__(self, img, pos):
+        w2 = img.get_width() // 2
+        h = img.get_height()
+        left = img.subsurface((0, 0, w2, h)).copy()
+        right = img.subsurface((w2, 0, img.get_width() - w2, h)).copy()
+        self.t = 0.0
+        self.parts = []
+        for surf, dx, vx in ((left, -w2 * 0.5, -26), (right, w2 * 0.5, 26)):
+            self.parts.append({"surf": surf, "pos": V2(pos.x + dx, pos.y),
+                               "vx": vx, "vy": random.uniform(-30, -10),
+                               "angle": 0.0, "spin": random.uniform(-55, 55),
+                               "ph": random.uniform(0, TAU)})
+
+    def update(self, dt, w):
+        self.t += dt
+        for p in self.parts:
+            p["vy"] = max(p["vy"] - 70 * dt, -70)
+            p["pos"].x = clamp(p["pos"].x + p["vx"] * dt, w.water.left + 20, w.water.right - 20)
+            p["pos"].y += p["vy"] * dt
+            p["vx"] *= max(0.0, 1 - 0.7 * dt)
+            top = w.waterline + p["surf"].get_height() * 0.22
+            if p["pos"].y <= top:
+                p["pos"].y = top + math.sin(w.t * 1.4 + p["ph"]) * 2
+                p["vy"] = 0
+                p["spin"] *= max(0.0, 1 - 1.5 * dt)
+            p["angle"] += p["spin"] * dt
+        return self.t < self.LINGER + self.FADE
+
+    def draw(self, s, w):
+        alpha = 255
+        if self.t > self.LINGER:
+            alpha = max(0, int(255 * (1 - (self.t - self.LINGER) / self.FADE)))
+        for p in self.parts:
+            img = pygame.transform.rotate(p["surf"], p["angle"])
+            if alpha < 255:
+                img.set_alpha(alpha)
+            s.blit(img, (int(p["pos"].x - img.get_width() / 2), int(p["pos"].y - img.get_height() / 2)))
 
 
 # ----------------------------------------------------------------------------
@@ -764,13 +883,7 @@ class Fish:
         self.hunger = hunger
         self.health = health
         self.age = age
-        growth = 1 + min(age / 86400 / 10, 1.0) * 0.18
-        self.scale = w.fish_scale * growth
-        self.size = g["len"] * self.scale
-        self.frames_r, self.frames_l = build_fish_frames(g, self.scale)
-        self.fw = self.frames_r[0].get_width()
-        self.fh = self.frames_r[0].get_height()
-        self.mouth_dx = self.fw / 2 - 5
+        self.rebuild_sprites()
         if pos is None:
             pos = V2(random.uniform(w.water.left + 100, w.water.right - 100),
                      random.uniform(w.waterline + 60, w.water.bottom - 120))
@@ -799,12 +912,38 @@ class Fish:
         self.beg_pt = None
         self.beg_next = 0.0
         self.puff = 1.0           # puffer inflation factor
-        e = self.traits["energy"]
-        self.cruise = (26 + self.size * 0.45) * (0.6 + e * 0.8)
-        self.burst = self.cruise * 2.7
-        self.turn = 2.2 + e * 1.3
+        self.cry_t = 0.0
+        self.turn = 2.2 + self.traits["energy"] * 1.3
         self._ckey = None
         self._csurf = None
+
+    def rebuild_sprites(self):
+        """(Re)generate frames and speed from the genome — also after growth spurts."""
+        w = self.w_ref
+        g = self.g
+        growth = 1 + min(self.age / 86400 / 10, 1.0) * 0.18
+        self.scale = w.fish_scale * growth * g.get("mult", 1.0)
+        cap = w.water.h * 0.35
+        if g["len"] * self.scale > cap:
+            self.scale = cap / g["len"]
+        self.size = g["len"] * self.scale
+        self.frames_r, self.frames_l = build_fish_frames(g, self.scale)
+        self.fw = self.frames_r[0].get_width()
+        self.fh = self.frames_r[0].get_height()
+        self.mouth_dx = self.fw / 2 - 5
+        e = self.traits["energy"]
+        self.cruise = (26 + self.size * 0.45) * (0.6 + e * 0.8) * g.get("speed_mult", 1.0)
+        self.burst = self.cruise * 2.7
+        self.belly = None
+        self._ckey = None
+        self._csurf = None
+
+    def grow(self, factor):
+        """Mean-duel prize: bigger and faster (capped so it stays on screen)."""
+        self.g["mult"] = round(min(self.g.get("mult", 1.0) * factor, 4.0), 2)
+        self.g["speed_mult"] = round(min(self.g.get("speed_mult", 1.0) * factor, 6.0), 2)
+        self.rebuild_sprites()
+        self.w_ref.dirty = True
 
     # ---------------- state helpers ----------------
     def set_state(self, name, dur, target=None, partner=None, rock=None, point=None, threat=None):
@@ -897,6 +1036,37 @@ class Fish:
                 w.particles.append(Speck(self.pos.x - self.facing * self.size * 0.4, self.pos.y + self.fh * 0.1))
                 w.murk = min(1.0, w.murk + 0.004)
                 self.next_poop = random.uniform(200, 520)
+        if self.cry_t > 0:
+            self.cry_t -= dt
+            if random.random() < dt * 3.0:
+                w.particles.append(Tear(self.pos.x + self.facing * self.size * 0.26,
+                                        self.pos.y - self.fh * 0.10))
+
+        # pleco latched onto the front glass, rasping algae
+        if self.state == "suck":
+            self.vel = V2(0, 0)
+            spot = self.target
+            if not any(sp is spot for sp in w.algae):
+                spot = w.nearest_algae(self.pos)
+                self.target = spot
+            if spot is not None:
+                goal = V2(spot["x"], spot["y"])
+                d = goal - self.pos
+                if d.length() > 6:
+                    self.pos += d.normalize() * min(30 * dt, d.length())
+                else:
+                    spot["r"] -= 1.4 * dt
+                    self.hunger = max(0.0, self.hunger - dt * 0.03)
+                    if spot["r"] <= 3:
+                        w.algae.remove(spot)
+                        w.particles.append(Puff(self.pos.x, self.pos.y, (110, 150, 100)))
+                        self.target = None
+            if w.t > self.until or (spot is None and random.random() < dt * 0.2):
+                for _ in range(3):
+                    w.particles.append(Bubble(self.pos.x + random.uniform(-6, 6), self.pos.y))
+                self.set_state("wander", 1)
+            self.phase += dt * 1.2
+            return
 
         # threat interrupt: someone is charging me
         if self.state not in ("flee", "display", "hide"):
@@ -994,10 +1164,21 @@ class Fish:
                 self.set_state("wander", 1)
             return self.vel * 1.0
 
+        if s == "to_glass":
+            spot = self.target
+            if not (isinstance(spot, dict) and any(sp is spot for sp in w.algae)) or t > self.until:
+                self.set_state("wander", 1)
+                return V2(0, 0)
+            goal = V2(spot["x"], spot["y"])
+            if self.pos.distance_to(goal) < 26:
+                self.set_state("suck", random.uniform(60, 150), target=spot)
+                return V2(0, 0)
+            return seek(goal, self.cruise * 1.2)
+
         if s == "seek_food":
             p = self.target
             if p is None or p.eaten:
-                p = w.nearest_pellet(self.pos, prefer_resting=(self.arch == "catfish"))
+                p = w.nearest_pellet(self.pos, prefer_resting=(self.arch in ("catfish", "pleco")))
                 self.target = p
             if p is None or self.hunger < 0.06:
                 self.set_state("wander", 1)
@@ -1017,13 +1198,20 @@ class Fish:
 
         if s == "chase":
             v = self.target
-            if v is None or v.gone() or t > self.until:
-                self.cool["agg"] = t + random.uniform(10, 22)
+            mean = self.g.get("mean")
+            if v is None or v.gone() or v.state == "suck" or t > self.until:
+                if mean:
+                    self.cool["hunt"] = t + random.uniform(10, 18)
+                else:
+                    self.cool["agg"] = t + random.uniform(10, 22)
                 self.set_state("wander", 1)
                 return V2(0, 0)
             if self.pos.distance_to(v.pos) < self.size * 0.5 + v.size * 0.25:
-                w.nip(self, v)
-                self.cool["agg"] = t + random.uniform(14, 30)
+                if mean and not v.g.get("mean"):
+                    w.bite(self, v)
+                else:
+                    w.nip(self, v)
+                    self.cool["agg"] = t + random.uniform(14, 30)
                 self.set_state("wander", 1)
                 return V2(0, 0)
             return seek(v.pos, self.burst)
@@ -1156,6 +1344,15 @@ class Fish:
         return V2(self.pos.x + self.facing * self.mouth_dx * 0.92, self.pos.y)
 
     def draw(self, s, w):
+        if self.state == "suck":   # pleco belly-first on the front glass
+            if self.belly is None:
+                self.belly = build_pleco_belly(self.g, self.scale)
+            img = self.belly
+            s.blit(img, (int(self.pos.x - img.get_width() / 2), int(self.pos.y - img.get_height() / 2)))
+            mr = max(3, int(img.get_width() * 0.15 + math.sin(w.t * 6 + self.id) * 1.5))
+            pygame.draw.circle(s, (215, 200, 170),
+                               (int(self.pos.x), int(self.pos.y - img.get_height() * 0.395)), mr, 2)
+            return
         idx = int(self.phase / TAU * N_PHASES) % N_PHASES
         dead = self.state == "dead"
         alpha = 255
@@ -1211,6 +1408,10 @@ class Aquarium:
         self.clams = []
         self.pellets = []
         self.particles = []
+        self.corpses = []        # bitten-in-half fish floating up
+        self.algae = []          # spots growing on the front glass
+        self.algae_next = random.uniform(15, 30)
+        self.fish_added = 0      # lifetime count; every MEAN_EVERYth is mean
         self.pills = []          # (fish, until)
         self.rels = {}
         self.sand_frac = 0.5
@@ -1340,7 +1541,20 @@ class Aquarium:
     def add_fish(self, arch=None, quiet=False):
         if len([f for f in self.fish if not f.gone()]) >= MAX_FISH:
             return None
+        self.fish_added += 1
+        mean = self.fish_added % MEAN_EVERY == 0
+        if arch is None and not mean and self.algae \
+                and random.random() < 0.10 + 0.30 * len(self.algae) / MAX_ALGAE:
+            arch = "pleco"   # a dirty tank attracts plecos
+        if mean and arch in (None, "pleco"):   # mean fish are swimmers
+            names = [n for n in ARCH_WEIGHTS if n != "pleco"]
+            arch = random.choices(names, weights=[ARCH_WEIGHTS[n] for n in names])[0]
         g = make_genome(random.Random(random.randrange(1 << 30)), arch=arch)
+        if mean:
+            g["mean"] = True
+            g["speed_mult"] = 1.5
+            g["traits"].update(agg=1.0, timid=0.02, soc=0.05,
+                               energy=max(0.8, g["traits"]["energy"]))
         f = Fish(self, g, self._pick_name(), self.next_id)
         self.next_id += 1
         self.fish.append(f)
@@ -1446,6 +1660,31 @@ class Aquarium:
                                        self.waterline - random.uniform(4, 60)))
         self.particles.append(Ripple(cx))
 
+    # ---------------- algae ----------------
+    def spawn_algae(self):
+        x = random.uniform(self.water.left + 40, self.water.right - 40)
+        y = random.uniform(self.waterline + 40, self.water.bottom - 30)
+        mr = random.uniform(12, 42) * clamp(self.fish_scale, 0.7, 1.4)
+        self.algae.append(self._make_spot(x, y, 2.5, mr, random.uniform(0.05, 0.16),
+                                          random.randrange(1 << 30)))
+        self.dirty = True
+
+    @staticmethod
+    def _make_spot(x, y, r, max_r, rate, seed):
+        rng = random.Random(seed)
+        blobs = [(rng.uniform(-0.65, 0.65), rng.uniform(-0.65, 0.65), rng.uniform(0.35, 0.85))
+                 for _ in range(rng.randint(4, 6))]
+        return {"x": x, "y": y, "r": r, "max_r": max_r, "rate": rate,
+                "seed": seed, "blobs": blobs}
+
+    def nearest_algae(self, pos):
+        best, bd = None, 1e18
+        for a in self.algae:
+            d = (pos - V2(a["x"], a["y"])).length_squared()
+            if d < bd:
+                best, bd = a, d
+        return best
+
     # ---------------- relationships ----------------
     @staticmethod
     def _rk(a, b):
@@ -1469,6 +1708,37 @@ class Aquarium:
     def fights_active(self):
         return sum(1 for f in self.fish if f.state in ("chase", "display"))
 
+    def bite(self, att, vic):
+        """A mean fish bites a victim clean in half."""
+        if vic.gone():
+            return
+        if vic.partner and vic.partner.partner is vic:
+            vic.partner.partner = None
+        idx = int(vic.phase / TAU * N_PHASES) % N_PHASES
+        img = vic.frames_r[idx] if vic.facing > 0 else vic.frames_l[idx]
+        self.corpses.append(Halves(img, vic.pos))
+        vic.remove = True
+        att.hunger = 0.0
+        att.eat_pause = 0.6
+        att.cool["hunt"] = self.t + random.uniform(35, 65)
+        mid = V2(vic.pos)
+        self.particles.append(Sparkle(mid.x, mid.y))
+        self.particles.append(Ripple(mid.x))
+        for _ in range(7):
+            self.particles.append(Bubble(mid.x + random.uniform(-14, 14), mid.y + random.uniform(-10, 10)))
+        self.murk = min(1.0, self.murk + 0.02)
+        # every other fish sheds a few tears; the nearby ones scatter
+        for f in self.fish:
+            if f is att or f is vic or f.gone() or f.g.get("mean"):
+                continue
+            f.cry_t = max(f.cry_t, random.uniform(1.2, 2.2))
+            if f.state != "suck" and f.pos.distance_to(mid) < 520 \
+                    and random.random() < 0.5 + f.traits["timid"] * 0.5:
+                f.set_state("flee", random.uniform(1.5, 3.0))
+                f.threat = None
+                f.threat_pos = V2(mid)
+        self.dirty = True
+
     def nip(self, att, vic):
         dmg = random.uniform(3, 8)
         vic.health -= dmg
@@ -1489,6 +1759,16 @@ class Aquarium:
             return f.size * 0.5 + f.traits["agg"] * 40 + f.health * 0.3 + random.uniform(0, 30)
         winner, loser = (a, b) if score(a) >= score(b) else (b, a)
         a.partner = b.partner = None
+        if a.g.get("mean") and b.g.get("mean"):
+            # mean-on-mean: winner takes all, and doubles
+            self.bite(winner, loser)
+            winner.grow(2)
+            for _ in range(6):
+                self.particles.append(Sparkle(winner.pos.x + random.uniform(-30, 30),
+                                              winner.pos.y + random.uniform(-20, 20)))
+            winner.cool["hunt"] = self.t + random.uniform(45, 80)
+            winner.set_state("wander", 1)
+            return
         self.rel_add(a, b, -0.22)
         self.nip(winner, loser)
         winner.cool["agg"] = self.t + random.uniform(18, 40)
@@ -1529,17 +1809,17 @@ class Aquarium:
         for f in alive:
             hthr = 0.42 - f.traits["greed"] * 0.22
             if f.hunger > hthr and f.state in CALM_STATES | {"circle"}:
-                p = self.nearest_pellet(f.pos, prefer_resting=(f.arch == "catfish"))
+                p = self.nearest_pellet(f.pos, prefer_resting=(f.arch in ("catfish", "pleco")))
                 if p is not None:
                     if f.partner and f.partner.partner is f:
                         f.partner.partner = None
                     f.set_state("seek_food", 9, target=p)
-        # friendships build on proximity
+        # friendships build on proximity (mean fish have no friends)
         for i, f in enumerate(alive):
-            if not f.calm():
+            if not f.calm() or f.g.get("mean"):
                 continue
             for f2 in alive[i + 1:]:
-                if not f2.calm():
+                if not f2.calm() or f2.g.get("mean"):
                     continue
                 if f.pos.distance_to(f2.pos) < 140:
                     self.rel_add(f, f2, 0.010 * (f.traits["soc"] + f2.traits["soc"]))
@@ -1548,6 +1828,27 @@ class Aquarium:
             if f.state not in CALM_STATES:
                 continue
             tr = f.traits
+            if f.g.get("mean"):
+                # mean fish don't make friends; they hunt
+                if t > f.cool.get("hunt", 0) and self.fights_active() < MAX_FIGHTS + 2:
+                    others = [v for v in alive if v is not f and v.calm()]
+                    means = [v for v in others if v.g.get("mean")]
+                    prey = [v for v in others if not v.g.get("mean")]
+                    small = [v for v in prey if v.size <= f.size * 1.5] or prey
+                    if means and (not small or random.random() < 0.3):
+                        m = random.choice(means)
+                        dur = random.uniform(2.5, 4.0)
+                        f.set_state("display", dur, partner=m)
+                        m.set_state("display", dur, partner=f)
+                        f.partner, m.partner = m, f
+                    elif small:
+                        f.set_state("chase", 6, target=random.choice(small))
+                continue
+            if f.arch == "pleco" and f.state in ("wander", "rest") and self.algae \
+                    and random.random() < 0.45:
+                spot = max(self.algae, key=lambda a: a["r"])
+                f.set_state("to_glass", 25, target=spot)
+                continue
             r = random.random()
             # aggression
             if r < tr["agg"] * 0.09 and t > f.cool.get("agg", 0) and self.fights_active() < MAX_FIGHTS:
@@ -1664,6 +1965,17 @@ class Aquarium:
         self.particles = [p for p in self.particles if p.update(dt, self)]
         if len(self.particles) > 260:
             self.particles = self.particles[-260:]
+        self.corpses = [c for c in self.corpses if c.update(dt, self)]
+
+        # algae creeps across the glass
+        for a in self.algae:
+            if a["r"] < a["max_r"]:
+                a["r"] = min(a["max_r"], a["r"] + a["rate"] * dt)
+        self.algae_next -= dt
+        if self.algae_next <= 0:
+            if len(self.algae) < MAX_ALGAE:
+                self.spawn_algae()
+            self.algae_next = random.uniform(20, 45)
 
         # ambient bubbles: airstone + occasional fish bubble
         self.airstone_next -= dt
@@ -1769,7 +2081,10 @@ class Aquarium:
         for p in self.pellets:
             p.draw(screen, self)
         for f in self.fish:
-            f.draw(screen, self)
+            if f.state != "suck":
+                f.draw(screen, self)
+        for c in self.corpses:
+            c.draw(screen, self)
         for p in self.particles:
             p.draw(screen, self)
         for r in self.rocks:
@@ -1778,6 +2093,11 @@ class Aquarium:
         if self.murk > 0.02:
             self.murk_surf.set_alpha(int(self.murk * 46))
             screen.blit(self.murk_surf, (self.water.left, self.waterline))
+        # algae on the front glass, and plecos rasping at it
+        self.draw_algae(screen)
+        for f in self.fish:
+            if f.state == "suck":
+                f.draw(screen, self)
         # air gap + waterline
         pygame.draw.rect(screen, (8, 11, 15),
                          (self.water.left, self.water.top, self.water.w, self.waterline - self.water.top))
@@ -1805,6 +2125,26 @@ class Aquarium:
         # name pills
         for f, until in self.pills:
             self.draw_pill(screen, f, until)
+
+    def draw_algae(self, screen):
+        for a in self.algae:
+            ri = int(a["r"])
+            if ri < 2:
+                continue
+            if a.get("surf_r") != ri:   # re-render only when it has visibly grown
+                d = ri * 2
+                surf = pygame.Surface((d * 2, d * 2), pygame.SRCALPHA)
+                for dxf, dyf, rf in a["blobs"]:
+                    pygame.draw.circle(surf, (58, 122, 52, 88),
+                                       (int(d + dxf * ri), int(d + dyf * ri)), max(1, int(rf * ri)))
+                for dxf, dyf, rf in a["blobs"][:3]:
+                    pygame.draw.circle(surf, (40, 92, 40, 70),
+                                       (int(d + dxf * ri * 0.6), int(d + dyf * ri * 0.6)),
+                                       max(1, int(rf * ri * 0.45)))
+                a["surf"] = surf
+                a["surf_r"] = ri
+            s_ = a["surf"]
+            screen.blit(s_, (int(a["x"] - s_.get_width() / 2), int(a["y"] - s_.get_height() / 2)))
 
     def draw_sand(self, screen):
         if self.sand_cur <= 0.015:
@@ -1845,6 +2185,11 @@ class Aquarium:
             "next_id": self.next_id,
             "sand_frac": round(self.sand_frac, 4),
             "murk": round(self.murk, 4),
+            "fish_added": self.fish_added,
+            "algae": [{"xf": round((a["x"] - self.water.left) / self.water.w, 4),
+                       "yf": round((a["y"] - self.water.top) / self.water.h, 4),
+                       "r": round(a["r"], 1), "max_r": round(a["max_r"], 1),
+                       "rate": a["rate"], "seed": a["seed"]} for a in self.algae],
             "fish": [f.to_dict(self) for f in self.fish if not f.gone()],
             "rels": {k: round(v, 3) for k, v in self.rels.items()},
             "rocks": [{"xf": round(r.x_frac, 4), "size": round(r.size, 1),
@@ -1858,6 +2203,12 @@ class Aquarium:
         self.next_id = d["next_id"]
         self.sand_frac = self.sand_cur = d["sand_frac"]
         self.murk = d.get("murk", 0.0)
+        self.fish_added = d.get("fish_added", d["next_id"] - 1)
+        for ad in d.get("algae", []):
+            self.algae.append(self._make_spot(
+                self.water.left + ad["xf"] * self.water.w,
+                self.water.top + ad["yf"] * self.water.h,
+                ad["r"], ad["max_r"], ad["rate"], ad["seed"]))
         self.rels = dict(d.get("rels", {}))
         elapsed = max(0.0, time.time() - d.get("saved_at", time.time()))
         extra_hunger = min(elapsed / HUNGER_FULL_S * 0.5, 1.0)
