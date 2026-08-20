@@ -96,7 +96,7 @@ ARCHETYPES = {
     "catfish":  dict(ln=(78, 166), ratio=(0.34, 0.44), tail="fork",     tl=(0.26, 0.34), sp=(0.40, 0.50), do=(0.25, 0.38), an=(0.16, 0.24), eye=(0.09, 0.12)),
     "pleco":    dict(ln=(100, 170), ratio=(0.30, 0.38), tail="fork",    tl=(0.24, 0.32), sp=(0.42, 0.52), do=(0.55, 0.85), an=(0.14, 0.20), eye=(0.09, 0.11)),
     "clown":    dict(ln=(55, 95),   ratio=(0.44, 0.54), tail="round",   tl=(0.26, 0.34), sp=(0.42, 0.52), do=(0.30, 0.42), an=(0.22, 0.30), eye=(0.11, 0.14)),
-    "seahorse": dict(ln=(52, 92),   ratio=(0.55, 0.65), tail="round",   tl=(0.20, 0.25), sp=(0.30, 0.40), do=(0.30, 0.40), an=(0.10, 0.15), eye=(0.13, 0.17)),
+    "seahorse": dict(ln=(95, 150),   ratio=(0.55, 0.65), tail="round",   tl=(0.20, 0.25), sp=(0.30, 0.40), do=(0.30, 0.40), an=(0.10, 0.15), eye=(0.13, 0.17)),
 }
 ARCH_WEIGHTS = {"tetra": 22, "goldfish": 16, "tang": 14, "angel": 12,
                 "betta": 10, "puffer": 12, "catfish": 14, "pleco": 8, "clown": 14,
@@ -1680,9 +1680,10 @@ class Fish:
                     by_ = self.pos.y + self.size * 0.08 + math.sin(a) * rad * 0.6 \
                         + math.sin(w.t * 2 + i) * b["bob"]
                     c = dim(self.g["base"], (0.75 + 0.25 * math.sin(i * 1.7)) * (0.3 + 0.7 * fade))
-                    pygame.draw.circle(s, c, (int(bx_), int(by_ - 3)), 2)   # head
-                    pygame.draw.circle(s, c, (int(bx_ - 1), int(by_)), 2)   # belly
-                    pygame.draw.circle(s, c, (int(bx_), int(by_ + 3)), 1)   # curled tail
+                    br = max(2, int(self.size * 0.022))
+                    pygame.draw.circle(s, c, (int(bx_), int(by_ - br * 1.6)), br)       # head
+                    pygame.draw.circle(s, c, (int(bx_ - 1), int(by_)), br)              # belly
+                    pygame.draw.circle(s, c, (int(bx_), int(by_ + br * 1.6)), max(1, br - 1))  # curled tail
 
     # ---------------- persistence ----------------
     def to_dict(self, w):
@@ -2697,6 +2698,9 @@ class Aquarium:
         for cd in d.get("clams", []):
             self.clams.append(Clam(cd["xf"], cd["size"], cd["seed"]))
         for fd in d.get("fish", []):
+            g_ = fd["genome"]
+            if g_["arch"] == "seahorse" and g_["len"] < 95:   # pre-upsize saves
+                g_["len"] = round(95 + (clamp(g_["len"], 52, 92) - 52) / 40 * 55, 1)
             pos = V2(self.water.left + fd["xf"] * self.water.w,
                      self.water.top + fd["yf"] * self.water.h)
             pos.x = clamp(pos.x, self.water.left + 30, self.water.right - 30)
