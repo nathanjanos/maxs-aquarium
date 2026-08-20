@@ -51,6 +51,7 @@ MAX_ALGAE         = 12
 MEAN_EVERY        = 10         # every Nth fish added is a mean one
 PLECO_GROW        = 0.004      # growth multiplier gained per unit of food
 PLECO_MAX_FRAC    = 0.30       # a pleco can reach this fraction of tank width
+MAX_PLANTS        = 10
 
 HUNGER_FULL_S     = 360.0      # seconds from fed to fully hungry
 STARVE_GRACE_S    = 240.0      # seconds at full hunger before health drains
@@ -95,9 +96,11 @@ ARCHETYPES = {
     "catfish":  dict(ln=(78, 166), ratio=(0.34, 0.44), tail="fork",     tl=(0.26, 0.34), sp=(0.40, 0.50), do=(0.25, 0.38), an=(0.16, 0.24), eye=(0.09, 0.12)),
     "pleco":    dict(ln=(100, 170), ratio=(0.30, 0.38), tail="fork",    tl=(0.24, 0.32), sp=(0.42, 0.52), do=(0.55, 0.85), an=(0.14, 0.20), eye=(0.09, 0.11)),
     "clown":    dict(ln=(55, 95),   ratio=(0.44, 0.54), tail="round",   tl=(0.26, 0.34), sp=(0.42, 0.52), do=(0.30, 0.42), an=(0.22, 0.30), eye=(0.11, 0.14)),
+    "seahorse": dict(ln=(52, 92),   ratio=(0.55, 0.65), tail="round",   tl=(0.20, 0.25), sp=(0.30, 0.40), do=(0.30, 0.40), an=(0.10, 0.15), eye=(0.13, 0.17)),
 }
 ARCH_WEIGHTS = {"tetra": 22, "goldfish": 16, "tang": 14, "angel": 12,
-                "betta": 10, "puffer": 12, "catfish": 14, "pleco": 8, "clown": 14}
+                "betta": 10, "puffer": 12, "catfish": 14, "pleco": 8, "clown": 14,
+                "seahorse": 10}
 
 # personality priors per archetype: 0..1. Deliberately far apart so each
 # species has a strong, recognizable temperament (per-fish jitter is small):
@@ -115,6 +118,7 @@ TRAIT_PRIORS = {
     "catfish":  (0.03, 0.30, 0.40, 0.20, 0.85, 0.65, 0.20),
     "pleco":    (0.02, 0.20, 0.30, 0.10, 0.90, 0.50, 0.15),
     "clown":    (0.15, 0.85, 0.70, 0.60, 0.60, 0.50, 0.70),
+    "seahorse": (0.02, 0.80, 0.50, 0.30, 0.50, 0.70, 0.25),
 }
 TRAIT_KEYS = ("agg", "soc", "cur", "play", "greed", "timid", "energy")
 
@@ -123,6 +127,7 @@ ZONES = {
     "tetra": (0.10, 0.55), "goldfish": (0.25, 0.80), "tang": (0.15, 0.75),
     "angel": (0.12, 0.70), "betta": (0.08, 0.50), "puffer": (0.30, 0.85),
     "catfish": (0.78, 1.00), "pleco": (0.85, 1.00), "clown": (0.18, 0.70),
+    "seahorse": (0.35, 0.95),
 }
 
 CALM_STATES = {"wander", "rest", "investigate", "school", "beg", "play", "to_glass"}
@@ -214,6 +219,7 @@ def make_genome(rng, arch=None):
         "catfish":  [("spots", 5), ("none", 4), ("bars", 1)],
         "pleco":    [("spots", 9), ("bars", 1)],
         "clown":    [("clownbars", 1)],
+        "seahorse": [("none", 6), ("spots", 4)],
     }[arch]
     names = [p for p, _ in patterns]
     pat = rng.choices(names, weights=[w for _, w in patterns])[0]
@@ -409,6 +415,79 @@ def render_fish_frame(g, phase, scale):
 
 def build_fish_frames(g, scale, n_phases=N_PHASES):
     frames_r = [render_fish_frame(g, i / n_phases * TAU, scale) for i in range(n_phases)]
+    frames_l = [pygame.transform.flip(f, True, False) for f in frames_r]
+    return frames_r, frames_l
+
+
+def render_seahorse(g, phase, scale):
+    """A seahorse: upright S-posture, tube snout, fluttering dorsal, curled tail."""
+    H = g["len"] * scale          # seahorses are measured tall
+    W = H * 0.66
+    s = pygame.Surface((int(W * SS), int(H * SS)), pygame.SRCALPHA)
+    rng = random.Random(g["pseed"])
+    base = tuple(g["base"])
+    belly = tuple(g["belly"])
+    dark = dim(base, 0.55)
+    fin = tuple(g["fin"]) + (185,)
+    flut = math.sin(phase * 3)
+
+    def E(col, x, y, w_, h_):
+        pygame.draw.ellipse(s, col, pygame.Rect(int((x - w_ / 2) * SS), int((y - h_ / 2) * SS),
+                                                max(1, int(w_ * SS)), max(1, int(h_ * SS))))
+
+    def P2(x, y):
+        return (x * SS, y * SS)
+
+    # dorsal fin on the back, fluttering fast (this is how they swim)
+    pygame.draw.polygon(s, fin, [P2(W * 0.32, H * 0.36),
+                                 P2(W * 0.15 + flut * W * 0.05, H * 0.42),
+                                 P2(W * 0.17 + flut * W * 0.06, H * 0.53),
+                                 P2(W * 0.33, H * 0.56)])
+    # curled tail: shrinking beads along a spiral
+    for i in range(13):
+        tt = i / 12
+        a = math.radians(95 - 300 * tt)
+        r_path = H * (0.155 - 0.075 * tt)
+        px = W * 0.47 + math.cos(a) * r_path * 0.95
+        py = H * 0.72 + math.sin(a) * r_path
+        rr = max(1.2, H * 0.042 * (1 - 0.80 * tt))
+        E(dim(base, 0.85 if i % 2 else 1.0), px, py, rr * 2, rr * 2)
+    # belly + chest + head
+    E(dark, W * 0.46, H * 0.50, W * 0.42, H * 0.42)
+    E(base, W * 0.46, H * 0.50, W * 0.38, H * 0.38)
+    E(belly, W * 0.42, H * 0.52, W * 0.20, H * 0.26)
+    E(base, W * 0.52, H * 0.30, W * 0.22, H * 0.22)
+    E(dark, W * 0.55, H * 0.155, W * 0.27, H * 0.145)
+    E(base, W * 0.55, H * 0.155, W * 0.24, H * 0.125)
+    # tube snout + tip
+    E(base, W * 0.73, H * 0.175, W * 0.22, H * 0.055)
+    E(dim(base, 0.7), W * 0.83, H * 0.175, W * 0.05, H * 0.045)
+    # coronet
+    pygame.draw.polygon(s, dark, [P2(W * 0.49, H * 0.095), P2(W * 0.55, H * 0.03),
+                                  P2(W * 0.60, H * 0.10)])
+    # belly ridges
+    for k in range(4):
+        ry = H * (0.40 + 0.07 * k)
+        pygame.draw.arc(s, dim(base, 0.62),
+                        pygame.Rect(int(W * 0.28 * SS), int((ry - H * 0.03) * SS),
+                                    int(W * 0.37 * SS), int(H * 0.07 * SS)),
+                        math.radians(200), math.radians(340), max(1, SS))
+    # spots
+    if g["pattern"] == "spots":
+        pc = tuple(g["pat_col"])
+        for _ in range(rng.randint(4, 8)):
+            E(pc, W * rng.uniform(0.36, 0.58), H * rng.uniform(0.30, 0.62),
+              W * 0.05, W * 0.05)
+    # eye
+    er = H * 0.024
+    E((240, 240, 235), W * 0.585, H * 0.135, er * 3.2, er * 3.2)
+    E((16, 18, 24), W * 0.595, H * 0.135, er * 2, er * 2)
+    E((255, 255, 255), W * 0.605, H * 0.125, er, er)
+    return pygame.transform.smoothscale(s, (int(W), int(H)))
+
+
+def build_seahorse_frames(g, scale, n_phases=10):
+    frames_r = [render_seahorse(g, i / n_phases * TAU, scale) for i in range(n_phases)]
     frames_l = [pygame.transform.flip(f, True, False) for f in frames_r]
     return frames_r, frames_l
 
@@ -821,6 +900,73 @@ class Rock:
 
 
 # ----------------------------------------------------------------------------
+# Seaweed
+# ----------------------------------------------------------------------------
+
+class Seaweed:
+    """A tall swaying plant: 1-3 stalks of tapered leafy segments rooted in the sand."""
+
+    def __init__(self, x_frac, h_frac, seed, front):
+        self.x_frac = x_frac
+        self.h_frac = h_frac
+        self.seed = seed
+        self.front = front
+        rng = random.Random(seed)
+        hue = rng.uniform(0.24, 0.38)
+        self.col = tuple(hsv(hue, rng.uniform(0.55, 0.80), rng.uniform(0.32, 0.52)))
+        self.leaf_col = tuple(hsv(hue + 0.03, rng.uniform(0.5, 0.7), rng.uniform(0.45, 0.62)))
+        self.stalks = []
+        for i in range(rng.randint(1, 3)):
+            self.stalks.append({
+                "dx": rng.uniform(-14, 14) if i else 0.0,
+                "hmul": rng.uniform(0.60, 0.92) if i else 1.0,
+                "ph": rng.uniform(0, TAU),
+                "spd": rng.uniform(0.45, 0.85),
+                "amp": rng.uniform(0.10, 0.20),
+                "nseg": rng.randint(10, 14),
+                "w0": rng.uniform(3.0, 5.0),
+            })
+
+    def base(self, w):
+        x = w.water.left + self.x_frac * w.water.w
+        return x, w.sand_top(x) + 2
+
+    def height(self, w):
+        return self.h_frac * w.water.h
+
+    def sway_at(self, w, hfrac):
+        """x-offset of the main stalk at a given height fraction (for hitchhikers)."""
+        st = self.stalks[0]
+        h = self.height(w) * st["hmul"]
+        return math.sin(w.t * st["spd"] + st["ph"] + hfrac * st["nseg"] * 0.5) \
+            * (hfrac ** 1.7) * h * st["amp"]
+
+    def draw(self, s, w):
+        bx, by = self.base(w)
+        H = self.height(w)
+        for st in self.stalks:
+            h = H * st["hmul"]
+            n = st["nseg"]
+            seg = h / n
+            prev = (bx + st["dx"], by)
+            for i in range(1, n + 1):
+                f = i / n
+                x = bx + st["dx"] + math.sin(w.t * st["spd"] + st["ph"] + i * 0.5) \
+                    * (f ** 1.7) * h * st["amp"]
+                y = by - i * seg
+                wdt = max(1, int(st["w0"] * (1 - f * 0.65)))
+                pygame.draw.line(s, self.col, prev, (x, y), wdt)
+                if i > 2 and i % 2 == 0:
+                    side = 1 if (i // 2) % 2 else -1
+                    ll = (1.1 + 0.4 * math.sin(i * 2.7)) * seg
+                    lx = x + side * ll * (0.9 + 0.2 * math.sin(w.t * st["spd"] * 1.3 + i))
+                    ly = y - seg * 0.45
+                    pygame.draw.polygon(s, self.leaf_col,
+                                        [(x, y), (lx, ly), (x + (lx - x) * 0.45, y - seg * 0.85)])
+                prev = (x, y)
+
+
+# ----------------------------------------------------------------------------
 # Clams
 # ----------------------------------------------------------------------------
 
@@ -986,6 +1132,11 @@ class Fish:
         self.beg_next = 0.0
         self.puff = 1.0           # puffer inflation factor
         self.cry_t = 0.0
+        self.fry = None           # seahorse dads carry the babies
+        self.hitch_h = 0.5
+        self.anchor = V2(self.pos)
+        self.crowd_t = 0.0
+        self.crowd_lim = random.uniform(50, 75)
         self.turn = 2.2 + self.traits["energy"] * 1.3
         self._ckey = None
         self._csurf = None
@@ -1002,14 +1153,19 @@ class Fish:
             self.scale = cap / g["len"]
         self.size = g["len"] * self.scale
         n = N_PHASES if self.size < 420 else 8   # giants get fewer frames (memory)
-        self.frames_r, self.frames_l = build_fish_frames(g, self.scale, n)
+        if g["arch"] == "seahorse":
+            self.frames_r, self.frames_l = build_seahorse_frames(g, self.scale)
+        else:
+            self.frames_r, self.frames_l = build_fish_frames(g, self.scale, n)
         self.fw = self.frames_r[0].get_width()
         self.fh = self.frames_r[0].get_height()
         self.mouth_dx = self.fw / 2 - 5
         e = self.traits["energy"]
         self.cruise = (26 + self.size * 0.45) * (0.6 + e * 0.8) * g.get("speed_mult", 1.0)
-        if g["arch"] == "pleco":
-            self.cruise *= 0.55   # a lumbering giant, not a speedboat
+        if g["arch"] == "pleco":  # only GIANT plecos lumber; small ones move fine
+            self.cruise *= clamp(1.0 - (self.size - 150) / 600.0, 0.55, 1.0)
+        elif g["arch"] == "seahorse":
+            self.cruise *= 0.5    # upright putterers
         self.burst = self.cruise * 2.7
         self._applied_mult = g.get("mult", 1.0)
         self.belly = None
@@ -1064,6 +1220,7 @@ class Fish:
             self.partner.set_state("wander", 1)
         self.state = "dead"
         self.death_t = 0.0
+        self.fry = None
         self.vel = V2(random.uniform(-8, 8), -15)
         for _ in range(6):
             w.particles.append(Bubble(self.pos.x + random.uniform(-8, 8), self.pos.y, r=random.uniform(1.5, 3.5)))
@@ -1142,7 +1299,7 @@ class Fish:
                 goal = V2(spot["x"], spot["y"])
                 d = goal - self.pos
                 if d.length() > 6:
-                    self.pos += d.normalize() * min(30 * dt, d.length())
+                    self.pos += d.normalize() * min(max(30, self.size * 0.15) * dt, d.length())
                 else:
                     spot["r"] -= 1.4 * dt
                     self.hunger = max(0.0, self.hunger - dt * 0.03)
@@ -1157,6 +1314,20 @@ class Fish:
                 self.set_state("wander", 1)
             self.phase += dt * 1.2
             return
+
+        # anti-clump: loitering in a crowd too long earns a jolt
+        self.anchor += (self.pos - self.anchor) * min(1, dt * 0.1)
+        if self.pos.distance_to(self.anchor) < 70:
+            near = sum(1 for f2 in w.fish
+                       if f2 is not self and not f2.gone() and f2.pos.distance_to(self.pos) < 130)
+            if near >= 2:
+                self.crowd_t += dt
+            else:
+                self.crowd_t = max(0.0, self.crowd_t - dt * 2)
+        else:
+            self.crowd_t = max(0.0, self.crowd_t - dt * 3)
+        if self.crowd_t > self.crowd_lim and self.state in CALM_STATES:
+            w.scatter(self)
 
         # threat interrupt: someone is charging me
         if self.state not in ("flee", "display", "hide"):
@@ -1183,15 +1354,16 @@ class Fish:
         top_b = w.waterline + max(20, self.fh * 0.35)
         if self.state == "beg":
             top_b = w.waterline + 8
-        floor_b = w.sand_top(self.pos.x) - self.size * (0.10 if self.arch == "catfish" else 0.25)
+        floor_b = w.sand_top(self.pos.x) - self.size * (0.10 if self.arch in ("catfish", "pleco") else 0.25)
         if self.pos.x < w.water.left + m:
             desired.x += (1 - (self.pos.x - w.water.left) / m) * 260
         if self.pos.x > w.water.right - m:
             desired.x -= (1 - (w.water.right - self.pos.x) / m) * 260
-        if self.pos.y < top_b + m * 0.6:
-            desired.y += (1 - (self.pos.y - top_b) / (m * 0.6)) * 200
-        if self.pos.y > floor_b - m * 0.6:
-            desired.y -= (1 - (floor_b - self.pos.y) / (m * 0.6)) * 200
+        if self.state not in ("to_glass", "hitch"):   # glass/plant targets can hug bounds
+            if self.pos.y < top_b + m * 0.6:
+                desired.y += (1 - (self.pos.y - top_b) / (m * 0.6)) * 200
+            if self.pos.y > floor_b - m * 0.6:
+                desired.y -= (1 - (floor_b - self.pos.y) / (m * 0.6)) * 200
 
         if self.eat_pause > 0:
             desired *= 0.12
@@ -1219,6 +1391,8 @@ class Fish:
             self.facing = -1
 
         tp = clamp(math.degrees(math.atan2(-self.vel.y, abs(self.vel.x) + 26)), -26, 26)
+        if self.arch == "seahorse":   # seahorses stay upright
+            tp = clamp(tp * 0.25, -8, 8)
         if weak:
             tp -= 9
         self.pitch += (tp - self.pitch) * min(1, dt * 6)
@@ -1256,16 +1430,30 @@ class Fish:
                 self.set_state("wander", 1)
             return self.vel * 1.0
 
+        if s == "hitch":
+            plant = self.target
+            if plant not in w.plants or t > self.until:
+                self.set_state("wander", 1)
+                return V2(0, 0)
+            bx, by = plant.base(w)
+            gx = bx + plant.sway_at(w, self.hitch_h) * 0.9
+            gy = by - plant.height(w) * self.hitch_h
+            d = V2(gx, gy) - self.pos
+            if d.length() < 14:
+                self.pos = self.pos.lerp(V2(gx, gy), min(1, dt * 6))
+                return V2(0, math.sin(t * 1.4 + self.id) * 6)
+            return seek((gx, gy), max(self.cruise * 1.2, 40))
+
         if s == "to_glass":
             spot = self.target
             if not (isinstance(spot, dict) and any(sp is spot for sp in w.algae)) or t > self.until:
                 self.set_state("wander", 1)
                 return V2(0, 0)
             goal = V2(spot["x"], spot["y"])
-            if self.pos.distance_to(goal) < 26:
+            if self.pos.distance_to(goal) < max(30, self.size * 0.2):
                 self.set_state("suck", random.uniform(60, 150), target=spot)
                 return V2(0, 0)
-            return seek(goal, self.cruise * 1.2)
+            return seek(goal, max(self.cruise * 1.2, 60))
 
         if s == "seek_food":
             p = self.target
@@ -1472,6 +1660,22 @@ class Fish:
             self._csurf = img
         img = self._csurf
         s.blit(img, (int(self.pos.x - img.get_width() / 2), int(self.pos.y - img.get_height() / 2)))
+        # seahorse dad with a cloud of 15 tiny babies around his belly
+        if self.fry is not None:
+            if w.t > self.fry["until"]:
+                self.fry = None
+            else:
+                fade = clamp((self.fry["until"] - w.t) / 8, 0, 1)
+                for i, b in enumerate(self.fry["babies"]):
+                    a = w.t * b["spd"] + b["ph"]
+                    rad = self.size * (0.40 + 0.45 * (b["r"] - 0.5))
+                    bx_ = self.pos.x + math.cos(a) * rad
+                    by_ = self.pos.y + self.size * 0.08 + math.sin(a) * rad * 0.6 \
+                        + math.sin(w.t * 2 + i) * b["bob"]
+                    c = dim(self.g["base"], (0.75 + 0.25 * math.sin(i * 1.7)) * (0.3 + 0.7 * fade))
+                    pygame.draw.circle(s, c, (int(bx_), int(by_ - 3)), 2)   # head
+                    pygame.draw.circle(s, c, (int(bx_ - 1), int(by_)), 2)   # belly
+                    pygame.draw.circle(s, c, (int(bx_), int(by_ + 3)), 1)   # curled tail
 
     # ---------------- persistence ----------------
     def to_dict(self, w):
@@ -1502,6 +1706,7 @@ class Aquarium:
         self.pellets = []
         self.particles = []
         self.corpses = []        # bitten-in-half fish floating up
+        self.plants = []         # swaying seaweed
         self.algae = []          # spots growing on the front glass
         self.algae_next = random.uniform(6, 14)
         self.fish_added = 0      # lifetime count; every MEAN_EVERYth is mean
@@ -1622,6 +1827,8 @@ class Aquarium:
             self.add_clam(quiet=True)
         for arch in ("tetra", "tetra", "goldfish", "tang", "catfish"):
             self.add_fish(arch=arch, quiet=True)
+        for _ in range(2):
+            self.add_plant(quiet=True)
         self.seed_algae(3)
         self.dirty = True
 
@@ -1640,8 +1847,8 @@ class Aquarium:
         if arch is None and not mean and self.algae \
                 and random.random() < 0.10 + 0.30 * len(self.algae) / MAX_ALGAE:
             arch = "pleco"   # a dirty tank attracts plecos
-        if mean and arch in (None, "pleco"):   # mean fish are swimmers
-            names = [n for n in ARCH_WEIGHTS if n != "pleco"]
+        if mean and arch in (None, "pleco", "seahorse"):   # mean fish are swimmers
+            names = [n for n in ARCH_WEIGHTS if n not in ("pleco", "seahorse")]
             arch = random.choices(names, weights=[ARCH_WEIGHTS[n] for n in names])[0]
         g = make_genome(random.Random(random.randrange(1 << 30)), arch=arch)
         if mean:
@@ -1706,6 +1913,38 @@ class Aquarium:
         x = self.water.left + r.x_frac * self.water.w
         for _ in range(4):
             self.particles.append(Puff(x + random.uniform(-16, 16), self.sand_top(x) - 8, dim(SAND_COLOR, 0.9)))
+        self.dirty = True
+
+    def add_plant(self, quiet=False):
+        if len(self.plants) >= MAX_PLANTS:
+            return
+        best, best_d = None, -1
+        for _ in range(10):
+            xf = random.uniform(0.05, 0.95)
+            d = min([abs(xf - p.x_frac) for p in self.plants]
+                    + [abs(xf - r.x_frac) * 0.8 for r in self.rocks] + [1.0])
+            if d > best_d:
+                best, best_d = xf, d
+        p = Seaweed(best, random.uniform(0.35, 0.80), random.randrange(1 << 30),
+                    front=random.random() < 0.35)
+        self.plants.append(p)
+        if not quiet:
+            x = self.water.left + p.x_frac * self.water.w
+            self.announce(V2(x, self.sand_top(x) - 80), kind="object")
+            for _ in range(3):
+                self.particles.append(Puff(x + random.uniform(-12, 12), self.sand_top(x) - 6,
+                                           dim(SAND_COLOR, 0.9)))
+        self.dirty = True
+
+    def remove_plant(self, plant=None):
+        if not self.plants:
+            return
+        p = plant if plant in self.plants else self.plants[-1]
+        self.plants.remove(p)
+        x = self.water.left + p.x_frac * self.water.w
+        for _ in range(3):
+            self.particles.append(Puff(x + random.uniform(-10, 10), self.sand_top(x) - 20,
+                                       (90, 130, 80)))
         self.dirty = True
 
     def add_clam(self, quiet=False):
@@ -1778,6 +2017,14 @@ class Aquarium:
         return {"x": x, "y": y, "r": r, "max_r": max_r, "rate": rate,
                 "seed": seed, "blobs": blobs}
 
+    def _fish_by_id(self, fid):
+        if fid is None:
+            return None
+        for f in self.fish:
+            if f.id == fid:
+                return f
+        return None
+
     def nearest_algae(self, pos):
         best, bd = None, 1e18
         for a in self.algae:
@@ -1808,6 +2055,29 @@ class Aquarium:
     # ---------------- fish interactions ----------------
     def fights_active(self):
         return sum(1 for f in self.fish if f.state in ("chase", "display"))
+
+    def scatter(self, f):
+        """Break up a loitering huddle: dart away and pick a far-off destination."""
+        f.crowd_t = 0.0
+        f.crowd_lim = random.uniform(50, 75)
+        near = [o for o in self.fish if o is not f and not o.gone()
+                and o.pos.distance_to(f.pos) < 180]
+        if near:
+            ctr = sum((o.pos for o in near), V2()) / len(near)
+            away = f.pos - ctr
+        else:
+            away = V2(random.uniform(-1, 1), random.uniform(-0.5, 0.2))
+        if away.length_squared() < 1:
+            away = V2(random.choice((-1, 1)), random.uniform(-0.4, 0.2))
+        f.vel = away.normalize() * f.burst
+        far_x = self.water.left + self.water.w * (random.uniform(0.60, 0.92)
+                if f.pos.x < self.water.centerx else random.uniform(0.08, 0.40))
+        zlo, zhi = f.zone_band(self)
+        f.set_state("startle", 0.7)
+        f.wander_pt = V2(far_x, random.uniform(zlo, zhi))
+        f.wander_until = self.t + random.uniform(5, 8)
+        for _ in range(3):
+            self.particles.append(Bubble(f.pos.x + random.uniform(-8, 8), f.pos.y, r=random.uniform(1.2, 2.4)))
 
     def bite(self, att, vic):
         """A mean fish bites a victim clean in half."""
@@ -1909,7 +2179,7 @@ class Aquarium:
         # hungry fish notice food
         for f in alive:
             hthr = 0.42 - f.traits["greed"] * 0.22
-            if f.hunger > hthr and f.state in CALM_STATES | {"circle"}:
+            if f.hunger > hthr and f.state in (CALM_STATES - {"to_glass"}) | {"circle"}:
                 p = self.nearest_pellet(f.pos, prefer_resting=(f.arch in ("catfish", "pleco")))
                 if p is not None:
                     if f.partner and f.partner.partner is f:
@@ -1924,6 +2194,23 @@ class Aquarium:
                     continue
                 if f.pos.distance_to(f2.pos) < 140:
                     self.rel_add(f, f2, 0.010 * (f.traits["soc"] + f2.traits["soc"]))
+        # seahorse pairs sometimes have babies — even while hitched to a plant
+        for f in alive:
+            if f.arch != "seahorse" or f.fry is not None:
+                continue
+            mate = self._fish_by_id(f.g.get("mate"))
+            if mate is None or mate.gone() or mate.fry is not None or f.id > mate.id:
+                continue
+            if f.pos.distance_to(mate.pos) < 260 and t > f.cool.get("fry", 0) \
+                    and random.random() < 0.02:
+                f.fry = {"until": t + random.uniform(100, 180),
+                         "babies": [{"ph": random.uniform(0, TAU),
+                                     "spd": random.uniform(0.6, 1.4) * random.choice((-1, 1)),
+                                     "r": random.uniform(0.5, 1.1),
+                                     "bob": random.uniform(2, 5)} for _ in range(15)]}
+                f.cool["fry"] = t + random.uniform(240, 480)
+                for _ in range(6):
+                    self.particles.append(Bubble(f.pos.x + random.uniform(-10, 10), f.pos.y - 6))
         # impulses
         for f in alive:
             if f.state not in CALM_STATES:
@@ -1948,7 +2235,37 @@ class Aquarium:
             if f.arch == "pleco" and f.state in ("wander", "rest") and self.algae \
                     and random.random() < 0.45:
                 spot = max(self.algae, key=lambda a: a["r"])
-                f.set_state("to_glass", 25, target=spot)
+                f.set_state("to_glass", 40, target=spot)
+                continue
+            if f.arch == "seahorse":
+                mate = self._fish_by_id(f.g.get("mate"))
+                if mate is None or mate.gone():
+                    if f.g.get("mate") is not None:
+                        f.g["mate"] = None       # widowed; may love again someday
+                        self.dirty = True
+                    singles = [v for v in alive
+                               if v is not f and v.arch == "seahorse" and not v.g.get("mate")
+                               and v.calm() and f.pos.distance_to(v.pos) < 700]
+                    if singles and random.random() < 0.35:
+                        m2 = singles[0]
+                        f.g["mate"] = m2.id      # seahorses pair for life
+                        m2.g["mate"] = f.id
+                        self.rels[self._rk(f.id, m2.id)] = 1.0
+                        dur = random.uniform(2.5, 3.5)
+                        ctr = (f.pos + m2.pos) / 2
+                        f.set_state("circle", dur, partner=m2, point=ctr)
+                        m2.set_state("circle", dur, partner=f, point=ctr)
+                        f.partner, m2.partner = m2, f
+                        self.dirty = True
+                    continue
+                d = f.pos.distance_to(mate.pos)
+                if d > 240:
+                    f.set_state("school", random.uniform(4, 8), target=mate)
+                elif self.plants and f.state in ("wander", "rest") and random.random() < 0.5:
+                    plant = min(self.plants,
+                                key=lambda p: abs(self.water.left + p.x_frac * self.water.w - f.pos.x))
+                    f.set_state("hitch", random.uniform(30, 90), target=plant)
+                    f.hitch_h = random.uniform(0.30, 0.70)
                 continue
             r = random.random()
             # aggression
@@ -2164,6 +2481,11 @@ class Aquarium:
             if abs(pos.x - rx) < r.w * 0.5 and ry - r.h < pos.y < ry:
                 self.remove_rock(rock=r)
                 return
+        for p in self.plants:
+            bx, by = p.base(self)
+            if abs(pos.x - bx) < 26 and by - p.height(self) - 10 < pos.y < by:
+                self.remove_plant(plant=p)
+                return
 
     # ---------------- drawing ----------------
     def draw(self, screen):
@@ -2180,6 +2502,9 @@ class Aquarium:
         for r in self.rocks:
             if not r.front:
                 r.draw(screen, self)
+        for p in self.plants:
+            if not p.front:
+                p.draw(screen, self)
         for c in self.clams:
             c.draw(screen, self)
         for p in self.pellets:
@@ -2194,6 +2519,9 @@ class Aquarium:
         for r in self.rocks:
             if r.front:
                 r.draw(screen, self)
+        for p in self.plants:
+            if p.front:
+                p.draw(screen, self)
         if self.murk > 0.02:
             self.murk_surf.set_alpha(int(self.murk * 46))
             screen.blit(self.murk_surf, (self.water.left, self.waterline))
@@ -2302,6 +2630,8 @@ class Aquarium:
             "rels": {k: round(v, 3) for k, v in self.rels.items()},
             "rocks": [{"xf": round(r.x_frac, 4), "size": round(r.size, 1),
                        "seed": r.seed, "front": r.front} for r in self.rocks],
+            "plants": [{"xf": round(p.x_frac, 4), "hf": round(p.h_frac, 4),
+                        "seed": p.seed, "front": p.front} for p in self.plants],
             "clams": [{"xf": round(c.x_frac, 4), "size": round(c.size, 1),
                        "seed": c.seed} for c in self.clams],
         }
@@ -2323,6 +2653,8 @@ class Aquarium:
         extra_hunger = min(elapsed / HUNGER_FULL_S * 0.5, 1.0)
         for rd in d.get("rocks", []):
             self.rocks.append(Rock(rd["xf"], rd["size"], rd["seed"], rd["front"]))
+        for pd in d.get("plants", []):
+            self.plants.append(Seaweed(pd["xf"], pd["hf"], pd["seed"], pd["front"]))
         for cd in d.get("clams", []):
             self.clams.append(Clam(cd["xf"], cd["size"], cd["seed"]))
         for fd in d.get("fish", []):
@@ -2394,6 +2726,15 @@ def icon_clam(s, r, col):
         pygame.draw.line(s, (30, 36, 44), (cx, cy),
                          (cx + math.sin(a) * w * 0.42, cy - r.h * 0.26 * math.cos(a) - r.h * 0.02), 2)
     pygame.draw.line(s, col, (cx - w * 0.5, cy + r.h * 0.05), (cx + w * 0.5, cy + r.h * 0.05), 2)
+
+
+def icon_plant(s, r, col):
+    cx, cy = r.centerx, r.centery + r.h * 0.28
+    for dx, hh in ((-10, 0.42), (0, 0.55), (10, 0.36)):
+        x = cx + dx
+        pts = [(x + math.sin(f * 5 + dx) * 4, cy - f * r.h * hh) for f in (0, 0.25, 0.5, 0.75, 1.0)]
+        pygame.draw.lines(s, col, False, [(int(a), int(b)) for a, b in pts], 3)
+    pygame.draw.line(s, col, (cx - 16, cy + 2), (cx + 16, cy + 2), 3)
 
 
 def icon_food(s, r, col):
@@ -2495,6 +2836,8 @@ class App:
                    lambda: aq.sand_frac > 0.001),
             Button(icon_clam, "CLAM", "+", aq.add_clam, lambda: len(aq.clams) < MAX_CLAMS),
             Button(icon_clam, "CLAM", "-", aq.remove_clam, lambda: len(aq.clams) > 0),
+            Button(icon_plant, "PLANT", "+", aq.add_plant, lambda: len(aq.plants) < MAX_PLANTS),
+            Button(icon_plant, "PLANT", "-", aq.remove_plant, lambda: len(aq.plants) > 0),
             Button(icon_food, "FEED", None, aq.feed,
                    lambda: len(aq.pellets) < MAX_PELLETS, accent=True),
         ]

@@ -34,6 +34,7 @@ Big buttons along the bottom:
 - **SAND + / −** — raise or lower the sand bed
 - **CLAM + / −** — add or remove clams (they filter-feed and snap shut if
   you startle them)
+- **PLANT + / −** — plant or pull tall seaweed that sways in the current
 - **FEED** — sprinkle flakes on the surface (SPACE works too)
 
 Tap the water and curious fish come investigate. Tap a fish to see its
@@ -64,6 +65,13 @@ Fish really do get hungry — feed them or they'll crowd the surface begging,
 and a truly neglected fish will not make it. (Away from the keyboard the
 tank is merciful: fish get hungry while the app is closed, but nothing ever
 dies off-screen.) Overfeeding clouds the water, so go easy.
+
+## Seahorses
+
+Seahorses pair up **for life**. A pair drifts to the seaweed and hitches
+on side by side, and every once in a while they have babies — 15 tiny
+seahorses that swarm around the dad's belly (dads carry the young; that
+really is how seahorses do it) before swimming off on their own.
 
 And yes — the fish poop: little white worms, proportional to the fish,
 that squeeze out, sink to the sand, and dissolve. Max will notice.

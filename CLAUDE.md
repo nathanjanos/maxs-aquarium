@@ -70,6 +70,25 @@ now; same stack as the weather-frame project.
   feeds `Fish.feed_growth`: `g["fed"]` -> `g["mult"]` (PLECO_GROW per
   food unit), body capped at PLECO_MAX_FRAC (0.3) of tank width;
   sprites rebuild at ~5% size steps, giants drop to 8 anim frames.
+- **Seaweed** (`Seaweed`, PLANT buttons, MAX_PLANTS=10): 1-3 tapered
+  stalks with triangular leaf blades, per-stalk sine sway drawn each frame
+  (no pre-render); 35% front layer; persisted like rocks. `sway_at(w, hfrac)`
+  exposes the stalk offset for hitchhikers.
+- **Seahorses**: custom sprite (`render_seahorse` — upright, tube snout,
+  fluttering dorsal, curled tail; pitch damped to ±8°, half cruise). Pair
+  for life via `g["mate"]` ids (persisted); pairs stay close, hitch side
+  by side on seaweed (`hitch` state rides `sway_at`), and every ~4-8 min
+  the lower-id dad gets `fry`: 15 tiny babies orbiting his belly for a
+  few minutes (transient, not saved). Widows may re-pair. Excluded from
+  mean rolls; hitched seahorses can't be hunted.
+- **Anti-clump**: each fish keeps a position EMA + crowd timer; ~1 min of
+  loitering near ≥2 neighbors triggers `Aquarium.scatter` — a dart away
+  from the local centroid toward the far side of the tank (staggered
+  per-fish limits so huddles pop one fish at a time).
+- Pleco pacing gotcha (fixed once): cruise damp must scale with size
+  (only giants lumber), floor clearance 0.10 like catfish, and `to_glass`
+  skips top/floor wall-avoidance with a ≥60 px/s approach floor and
+  size-scaled arrival radius — otherwise plecos never reach the glass.
 - **World**: pellets sink, rest on sand, rot into `murk` (green haze that
   decays — overfeeding lesson); clams breathe on sines, snap when startled,
   filter-feed pellets; rocks pre-render seeded blob polygons (40% draw in
