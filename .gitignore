@@ -1,0 +1,4 @@
+__pycache__/
+.venv/
+aquarium_save.json
+.DS_Store
