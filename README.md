@@ -1,5 +1,7 @@
 # Max's Aquarium
 
+![Max's Aquarium — a living virtual fish tank](maxs-aquarium-screenshot.png)
+
 A fullscreen virtual aquarium for Max. A black gallery wall, a glass tank,
 and a growing cast of colorful fish — every one procedurally generated with
 its own shape, colors, name, and personality. They make friends, squabble,
